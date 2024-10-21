@@ -1,6 +1,7 @@
 const User = require("../models/User");
 const argon2 = require("argon2");
 const { generateToken } = require("../Middleware/Middleware");
+const Doctor = require("../models/Doctor");
 
 exports.registerUser = async (req, res) => {
   const { username, email, password, fullName, phone, gender, dateOfBirth, address } = req.body;
@@ -46,58 +47,69 @@ exports.registerUser = async (req, res) => {
 };
 
 exports.createDoctor = async (req, res) => {
-  const { username, email, password, fullName, phone, gender, dateOfBirth, address, specialty } = req.body;
+  const { username, email, password, fullName, phone, gender, dateOfBirth, address, specialization, experience, qualifications } = req.body;
 
   // Kiểm tra nếu có trường nào bị thiếu
-  if (!username || !email || !password || !fullName || !phone || !gender || !dateOfBirth || !address || !specialty) {
-    return res.status(400).json({
-      success: false,
-      message: 'Vui lòng điền đầy đủ thông tin!',
-    });
+  if (!username || !email || !password || !fullName || !phone || !gender || !dateOfBirth || !address || !specialization || !experience) {
+      return res.status(400).json({
+          success: false,
+          message: 'Vui lòng điền đầy đủ thông tin!',
+      });
   }
 
   try {
-    // Kiểm tra xem email đã tồn tại chưa
-    let user = await User.findOne({ email });
-    if (user) {
-      return res.status(400).json({ success: false, message: "Email đã được sử dụng" });
-    }
+      // Kiểm tra xem email đã tồn tại chưa
+      let user = await User.findOne({ email });
+      if (user) {
+          return res.status(400).json({ success: false, message: "Email đã được sử dụng" });
+      }
 
-    // Mã hóa mật khẩu bằng argon2
-    const hashedPassword = await argon2.hash(password);
+      // Mã hóa mật khẩu bằng argon2 hoặc bcrypt
+      const hashedPassword = await argon2.hash(password);
 
-    // Tạo tài khoản bác sĩ với vai trò "doctor"
-    user = new User({
-      username,
-      email,
-      password: hashedPassword,
-      role: "doctor", // Vai trò là "doctor"
-      fullName,
-      phone,
-      gender,
-      dateOfBirth,
-      address,
-      specialty, // Chuyên khoa của bác sĩ
-    });
+      // Tạo tài khoản người dùng với vai trò "doctor"
+      user = new User({
+          username,
+          email,
+          password: hashedPassword,
+          role: "doctor",
+          fullName,
+          phone,
+          gender,
+          dateOfBirth,
+          address,
+      });
 
-    await user.save();
+      await user.save();
 
-    res.status(201).json({
-      success: true,
-      message: "Tài khoản bác sĩ đã được tạo thành công",
-      user: {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        role: user.role, // Vai trò là "doctor"
-        specialty: user.specialty,
-      },
-    });
+      const doctorProfile = new Doctor({
+          user: user._id,
+          specialty: specialization,
+          experience,
+          qualifications: qualifications || []
+      });
+
+      await doctorProfile.save();
+
+      res.status(201).json({
+          success: true,
+          message: "Tài khoản và hồ sơ bác sĩ đã được tạo thành công",
+          user: {
+              id: user._id,
+              username: user.username,
+              email: user.email,
+              role: user.role,
+              specialization: doctorProfile.specialty, 
+              experience: doctorProfile.experience,
+          },
+      });
   } catch (error) {
-    console.error(error.message);
-    res.status(500).json({ success: false, message: "Lỗi máy chủ" });
+      console.error(error.message);
+      res.status(500).json({ success: false, message: "Lỗi máy chủ", error });
   }
 };
+
+
 
 exports.loginUser = async (req, res) => {
   const { username, password } = req.body;

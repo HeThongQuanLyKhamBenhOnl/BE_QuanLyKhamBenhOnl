@@ -28,6 +28,7 @@ const userSchema = new mongoose.Schema({
         type: String,
         required: true,
         unique: true,
+
     },
     gender: {
         type: String,
@@ -46,26 +47,8 @@ const userSchema = new mongoose.Schema({
         type: Number,
         default: 0,
     },
-    specialization: {
-        type: String,
-        required: function () {
-            return this.role === 'Doctor';
-        },
-    },
-    createdAt: {
-        type: Date,
-        default: Date.now,
-    },
-    updatedAt: {
-        type: Date,
-        default: Date.now,
-    }
-});
+}, { timestamps: true });
 
-userSchema.pre('save', function (next) {
-    this.updatedAt = Date.now();
-    next();
-});
 
 const User = mongoose.model('User', userSchema);
 

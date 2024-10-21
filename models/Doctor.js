@@ -21,19 +21,19 @@ const doctorSchema = new mongoose.Schema({
     },
     schedule: [{
         date: {
-            type: Date, // Ngày cụ thể cho lịch làm việc (ví dụ: 2024-10-15)
+            type: Date,
             required: true
         },
         startTime: {
-            type: String, // Giờ bắt đầu làm việc (ví dụ: '08:00')
+            type: String, 
             required: true
         },
         endTime: {
-            type: String, // Giờ kết thúc làm việc (ví dụ: '16:00')
+            type: String, 
             required: true
         },
         isAvailable: {
-            type: Boolean, // Bác sĩ có sẵn sàng làm việc không vào ngày cụ thể đó
+            type: Boolean, 
             default: true
         }
     }],
