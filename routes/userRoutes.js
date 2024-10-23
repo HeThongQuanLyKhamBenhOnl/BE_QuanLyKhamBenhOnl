@@ -15,19 +15,13 @@ const router = express.Router();
 
 // Đăng ký người dùng (bệnh nhân)
 router.post("/register", registerUser);
-
-// Đăng nhập người dùng
 router.post("/login", loginUser);
-
-// Cập nhật hồ sơ cá nhân (yêu cầu người dùng đã xác thực bằng JWT)
 router.put("/profile", verifyToken, updateUserProfile);
 
 router.get("/profile", verifyToken, getUserProfile);
 
 router.get("/getAllPatients",verifyToken , isAdmin , getAllPatients)
 router.get("/getAllDoctors",verifyToken , isAdmin , getAllDoctors)
-
-
 
 router.post("/create-admin", async (req, res) => {
   const { username, email, password, fullName, phone, gender, dateOfBirth, address } = req.body;

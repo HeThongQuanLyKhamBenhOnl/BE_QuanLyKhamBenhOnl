@@ -8,6 +8,7 @@ exports.generateToken = (user) => {
       id: user._id,
       role: user.role,
     },
+    
   };
 
   return jwt.sign(
@@ -39,8 +40,6 @@ exports.verifyToken = async (req, res, next) => {
     return res.status(401).json({ success: false, message: 'Token không hợp lệ', error: error.message });
   }
 };
-
-
 
 // Middleware để kiểm tra vai trò 'patient'
 exports.isPatient = (req, res, next) => {

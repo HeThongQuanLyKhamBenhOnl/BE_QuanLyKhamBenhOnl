@@ -109,8 +109,6 @@ exports.createDoctor = async (req, res) => {
   }
 };
 
-
-
 exports.loginUser = async (req, res) => {
   const { username, password } = req.body;
 
@@ -221,17 +219,39 @@ exports.getAllPatients = async (req, res) => {
 
 exports.getAllDoctors = async (req, res) => {
   try {
-    const doctors = await User.find({ role: "doctor" }).select("-password");
-    if (!doctors.length) {
+    // Lấy tất cả các người dùng có vai trò là "doctor", không lấy password
+    const users = await User.find({ role: 'doctor' }).select('-password');
+
+    if (!users.length) {
       return res.status(404).json({ success: false, message: "Không có bác sĩ nào" });
     }
+
+    // Tìm tất cả các hồ sơ Doctor có user thuộc danh sách người dùng vừa tìm
+    const doctors = await Doctor.find({ user: { $in: users.map(user => user._id) } })
+      .populate('user', '-password');
+
+    if (!doctors.length) {
+      return res.status(404).json({ success: false, message: "Không có hồ sơ bác sĩ nào" });
+    }
+
+    // Gộp thông tin từ User và Doctor
+    const mergedDoctors = doctors.map(doctor => ({
+      ...doctor.user.toObject(), // Dữ liệu từ User
+      specialty: doctor.specialty, // Thông tin từ Doctor
+      experience: doctor.experience,
+      qualifications: doctor.qualifications,
+      schedule: doctor.schedule,
+      patients: doctor.patients,
+      appointments: doctor.appointments
+    }));
+
+    // Trả về danh sách bác sĩ kèm thông tin hợp nhất
     res.status(200).json({
       success: true,
-      doctors,
+      doctors:  mergedDoctors
     });
   } catch (error) {
     console.error(error.message);
     res.status(500).json({ success: false, message: "Lỗi máy chủ" });
   }
 };
-

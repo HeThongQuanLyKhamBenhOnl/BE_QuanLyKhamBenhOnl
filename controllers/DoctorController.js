@@ -1,4 +1,5 @@
 const Doctor = require("../models/Doctor");
+const User = require("../models/User");
 
 exports.getDoctorProfile = async (req, res) => {
   try {
@@ -96,17 +97,34 @@ exports.getDoctorSchedule = async (req, res) => {
   }
 };
 
-// Lấy danh sách tất cả các bác sĩ
 exports.getAllDoctors = async (req, res) => {
   try {
-    const doctors = await Doctor.find().populate('user', '-password');
-    if (!doctors.length) {
+    // Lấy tất cả các người dùng có vai trò là "doctor", không lấy password
+    const users = await User.find({ role: 'doctor' }).select('-password');
+
+    if (!users.length) {
       return res.status(404).json({ success: false, message: "Không có bác sĩ nào" });
     }
+    const doctors = await Doctor.find({ user: { $in: users.map(user => user._id) } })
+      .populate('user', '-password');
 
+    if (!doctors.length) {
+      return res.status(404).json({ success: false, message: "Không có hồ sơ bác sĩ nào" });
+    }
+
+    // Gộp thông tin từ User và Doctor
+    const mergedDoctors = doctors.map(doctor => ({
+      ...doctor.user.toObject(), // Dữ liệu từ User
+      specialty: doctor.specialty, // Thông tin từ Doctor
+      experience: doctor.experience,
+      qualifications: doctor.qualifications,
+      schedule: doctor.schedule,
+      patients: doctor.patients,
+      appointments: doctor.appointments
+    }));
     res.status(200).json({
       success: true,
-      doctors
+      doctors: mergedDoctors
     });
   } catch (error) {
     console.error(error.message);
@@ -114,7 +132,7 @@ exports.getAllDoctors = async (req, res) => {
   }
 };
 
-// Lấy thông tin chi tiết của một bác sĩ
+
 exports.getDoctorById = async (req, res) => {
   const { doctorId } = req.params;
 

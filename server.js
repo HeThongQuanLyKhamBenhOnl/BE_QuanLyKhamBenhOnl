@@ -23,6 +23,7 @@ app.use(
 app.use(express.json());
 app.use("/api/users", require("./routes/userRoutes"));
 app.use("/api", require("./routes/doctorRoutes"));
+app.use("/api", require("./routes/appointmentRoutes"));
 
 app.use((err, req, res, next) => {
   console.error(err.stack);
