@@ -1,14 +1,13 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 
-// Middleware để tạo JWT token
+// Middleware tạo JWT token
 exports.generateToken = (user) => {
   const payload = {
     user: {
       id: user._id,
       role: user.role,
     },
-    
   };
 
   return jwt.sign(
@@ -18,6 +17,7 @@ exports.generateToken = (user) => {
   );
 };
 
+// Middleware xác thực JWT token
 exports.verifyToken = async (req, res, next) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
@@ -26,8 +26,6 @@ exports.verifyToken = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    // Sử dụng decoded.user.id thay vì decoded.id
     const user = await User.findById(decoded.user.id).select('-password');
 
     if (!user) {
@@ -41,29 +39,17 @@ exports.verifyToken = async (req, res, next) => {
   }
 };
 
-// Middleware để kiểm tra vai trò 'patient'
-exports.isPatient = (req, res, next) => {
-  if (req.user.role !== "patient") {
-    return res.status(403).json({ msg: "Access denied: Patients only" });
-  }
-  next();
+// Middleware kiểm tra vai trò dựa trên `role`
+exports.checkRole = (role) => {
+  return (req, res, next) => {
+    if (req.user.role !== role) {
+      return res.status(403).json({ msg: `Access denied: ${role}s only` });
+    }
+    next();
+  };
 };
 
-exports.isDoctor = async (req, res, next) => {
-  try {
-      const user = await User.findById(req.user.id);
-      if (user.role !== 'doctor') {
-          return res.status(403).json({ message: 'Bạn không có quyền truy cập vào tài nguyên này' });
-      }
-      next();
-  } catch (error) {
-      res.status(500).json({ message: 'Lỗi máy chủ', error });
-  }
-};
-// Middleware để kiểm tra vai trò 'admin'
-exports.isAdmin = (req, res, next) => {
-  if (req.user.role !== "admin") {
-    return res.status(403).json({ msg: "Access denied: Admins only" });
-  }
-  next();
-};
+// Sử dụng checkRole thay cho từng middleware riêng lẻ
+exports.isPatient = exports.checkRole('patient');
+exports.isDoctor = exports.checkRole('doctor');
+exports.isAdmin = exports.checkRole('admin');

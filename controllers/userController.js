@@ -4,12 +4,23 @@ const { generateToken } = require("../Middleware/Middleware");
 const Doctor = require("../models/Doctor");
 
 exports.registerUser = async (req, res) => {
-  const { username, email, password, fullName, phone, gender, dateOfBirth, address } = req.body;
+  const {
+    username,
+    email,
+    password,
+    fullName,
+    phone,
+    gender,
+    dateOfBirth,
+    address,
+  } = req.body;
 
   try {
     let user = await User.findOne({ email });
     if (user) {
-      return res.status(400).json({ success: false, message: "Email đã được sử dụng" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Email đã được sử dụng" });
     }
     const hashedPassword = await argon2.hash(password);
 
@@ -47,65 +58,90 @@ exports.registerUser = async (req, res) => {
 };
 
 exports.createDoctor = async (req, res) => {
-  const { username, email, password, fullName, phone, gender, dateOfBirth, address, specialization, experience, qualifications } = req.body;
+  const {
+    username,
+    email,
+    password,
+    fullName,
+    phone,
+    gender,
+    dateOfBirth,
+    address,
+    specialization,
+    experience,
+    qualifications,
+  } = req.body;
 
   // Kiểm tra nếu có trường nào bị thiếu
-  if (!username || !email || !password || !fullName || !phone || !gender || !dateOfBirth || !address || !specialization || !experience) {
-      return res.status(400).json({
-          success: false,
-          message: 'Vui lòng điền đầy đủ thông tin!',
-      });
+  if (
+    !username ||
+    !email ||
+    !password ||
+    !fullName ||
+    !phone ||
+    !gender ||
+    !dateOfBirth ||
+    !address ||
+    !specialization ||
+    !experience
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Vui lòng điền đầy đủ thông tin!",
+    });
   }
 
   try {
-      // Kiểm tra xem email đã tồn tại chưa
-      let user = await User.findOne({ email });
-      if (user) {
-          return res.status(400).json({ success: false, message: "Email đã được sử dụng" });
-      }
+    // Kiểm tra xem email đã tồn tại chưa
+    let user = await User.findOne({ email });
+    if (user) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Email đã được sử dụng" });
+    }
 
-      // Mã hóa mật khẩu bằng argon2 hoặc bcrypt
-      const hashedPassword = await argon2.hash(password);
+    // Mã hóa mật khẩu bằng argon2 hoặc bcrypt
+    const hashedPassword = await argon2.hash(password);
 
-      // Tạo tài khoản người dùng với vai trò "doctor"
-      user = new User({
-          username,
-          email,
-          password: hashedPassword,
-          role: "doctor",
-          fullName,
-          phone,
-          gender,
-          dateOfBirth,
-          address,
-      });
+    // Tạo tài khoản người dùng với vai trò "doctor"
+    user = new User({
+      username,
+      email,
+      password: hashedPassword,
+      role: "doctor",
+      fullName,
+      phone,
+      gender,
+      dateOfBirth,
+      address,
+    });
 
-      await user.save();
+    await user.save();
 
-      const doctorProfile = new Doctor({
-          user: user._id,
-          specialty: specialization,
-          experience,
-          qualifications: qualifications || []
-      });
+    const doctorProfile = new Doctor({
+      user: user._id,
+      specialty: specialization,
+      experience,
+      qualifications: qualifications || [],
+    });
 
-      await doctorProfile.save();
+    await doctorProfile.save();
 
-      res.status(201).json({
-          success: true,
-          message: "Tài khoản và hồ sơ bác sĩ đã được tạo thành công",
-          user: {
-              id: user._id,
-              username: user.username,
-              email: user.email,
-              role: user.role,
-              specialization: doctorProfile.specialty, 
-              experience: doctorProfile.experience,
-          },
-      });
+    res.status(201).json({
+      success: true,
+      message: "Tài khoản và hồ sơ bác sĩ đã được tạo thành công",
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        specialization: doctorProfile.specialty,
+        experience: doctorProfile.experience,
+      },
+    });
   } catch (error) {
-      console.error(error.message);
-      res.status(500).json({ success: false, message: "Lỗi máy chủ", error });
+    console.error(error.message);
+    res.status(500).json({ success: false, message: "Lỗi máy chủ", error });
   }
 };
 
@@ -115,12 +151,22 @@ exports.loginUser = async (req, res) => {
   try {
     const user = await User.findOne({ username });
     if (!user) {
-      return res.status(400).json({ success: false, message: "Tên đăng nhập hoặc mật khẩu không đúng" });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Tên đăng nhập hoặc mật khẩu không đúng",
+        });
     }
 
     const isMatch = await argon2.verify(user.password, password);
     if (!isMatch) {
-      return res.status(400).json({ success: false, message: "Tên đăng nhập hoặc mật khẩu không đúng" });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Tên đăng nhập hoặc mật khẩu không đúng",
+        });
     }
 
     const token = generateToken(user);
@@ -130,14 +176,14 @@ exports.loginUser = async (req, res) => {
       token,
       user: {
         id: user._id,
-        username: user.username, 
-        email: user.email, 
-        fullName : user.fullName,
-        gender : user.gender,
-        address : user.address,
-        dateOfBirth : user.dateOfBirth,
+        username: user.username,
+        email: user.email,
+        fullName: user.fullName,
+        gender: user.gender,
+        address: user.address,
+        dateOfBirth: user.dateOfBirth,
         role: user.role,
-        
+        phone: user.phone,
       },
     });
   } catch (error) {
@@ -153,7 +199,9 @@ exports.updateUserProfile = async (req, res) => {
     let user = await User.findById(req.user.id);
 
     if (!user) {
-      return res.status(404).json({ success: false, message: "Người dùng không tồn tại" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Người dùng không tồn tại" });
     }
 
     user.username = username || user.username;
@@ -165,9 +213,9 @@ exports.updateUserProfile = async (req, res) => {
 
     await user.save();
 
-    res.status(200).json({ 
-      success: true, 
-      message: "Cập nhật thông tin thành công", 
+    res.status(200).json({
+      success: true,
+      message: "Cập nhật thông tin thành công",
       user: {
         id: user._id,
         username: user.username,
@@ -177,7 +225,7 @@ exports.updateUserProfile = async (req, res) => {
         gender: user.gender,
         dateOfBirth: user.dateOfBirth,
         address: user.address,
-      }
+      },
     });
   } catch (error) {
     console.error(error.message);
@@ -189,7 +237,9 @@ exports.getUserProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("-password");
     if (!user) {
-      return res.status(404).json({ success: false, message: "Người dùng không tồn tại" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Người dùng không tồn tại" });
     }
     res.status(200).json({
       success: true,
@@ -205,7 +255,9 @@ exports.getAllPatients = async (req, res) => {
   try {
     const patients = await User.find({ role: "patient" }).select("-password");
     if (!patients.length) {
-      return res.status(404).json({ success: false, message: "Không có bệnh nhân nào" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Không có bệnh nhân nào" });
     }
     res.status(200).json({
       success: true,
@@ -220,35 +272,40 @@ exports.getAllPatients = async (req, res) => {
 exports.getAllDoctors = async (req, res) => {
   try {
     // Lấy tất cả các người dùng có vai trò là "doctor", không lấy password
-    const users = await User.find({ role: 'doctor' }).select('-password');
+    const users = await User.find({ role: "doctor" }).select("-password");
 
     if (!users.length) {
-      return res.status(404).json({ success: false, message: "Không có bác sĩ nào" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Không có bác sĩ nào" });
     }
 
     // Tìm tất cả các hồ sơ Doctor có user thuộc danh sách người dùng vừa tìm
-    const doctors = await Doctor.find({ user: { $in: users.map(user => user._id) } })
-      .populate('user', '-password');
+    const doctors = await Doctor.find({
+      user: { $in: users.map((user) => user._id) },
+    }).populate("user", "-password");
 
     if (!doctors.length) {
-      return res.status(404).json({ success: false, message: "Không có hồ sơ bác sĩ nào" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Không có hồ sơ bác sĩ nào" });
     }
 
     // Gộp thông tin từ User và Doctor
-    const mergedDoctors = doctors.map(doctor => ({
+    const mergedDoctors = doctors.map((doctor) => ({
       ...doctor.user.toObject(), // Dữ liệu từ User
       specialty: doctor.specialty, // Thông tin từ Doctor
       experience: doctor.experience,
       qualifications: doctor.qualifications,
       schedule: doctor.schedule,
       patients: doctor.patients,
-      appointments: doctor.appointments
+      appointments: doctor.appointments,
     }));
 
     // Trả về danh sách bác sĩ kèm thông tin hợp nhất
     res.status(200).json({
       success: true,
-      doctors:  mergedDoctors
+      doctors: mergedDoctors,
     });
   } catch (error) {
     console.error(error.message);
