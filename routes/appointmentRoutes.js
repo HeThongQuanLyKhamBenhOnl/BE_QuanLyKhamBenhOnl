@@ -7,13 +7,18 @@ const {
   cancelAppointment, 
   getDoctorAppointments,
   rescheduleAppointment ,
-  updateMedicalRecord
+  updateMedicalRecord,
+  getAllMedicalRecords
 } = require('../controllers/AppointmentController');
 const { verifyToken, isDoctor } = require('../Middleware/Middleware');
 
 // Route để tạo lịch hẹn
 router.post('/appointments', verifyToken, createAppointment);
+
 router.put('/medical-records/:recordId', verifyToken, isDoctor, updateMedicalRecord);
+
+router.get('/medical-records', verifyToken, isDoctor, getAllMedicalRecords);
+
 // Route để lấy danh sách lịch hẹn
 router.get('/appointments', verifyToken, getAppointments);
 
@@ -22,7 +27,7 @@ router.put('/appointments/:appointmentId/status', verifyToken,isDoctor, updateAp
 
 router.get('/appointments/doctor', verifyToken, isDoctor, getDoctorAppointments);
 // Route để hủy lịch hẹn
-router.put('/appointments/:appointmentId/cancel', verifyToken, cancelAppointment);
+router.put('/appointments/:appointmentId/cancel', verifyToken,isDoctor, cancelAppointment);
 
 // Route để dời lịch hẹn
 router.put('/appointments/:appointmentId/reschedule', verifyToken, rescheduleAppointment);

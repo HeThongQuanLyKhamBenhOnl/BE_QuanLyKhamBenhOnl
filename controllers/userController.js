@@ -151,22 +151,18 @@ exports.loginUser = async (req, res) => {
   try {
     const user = await User.findOne({ username });
     if (!user) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Tên đăng nhập hoặc mật khẩu không đúng",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Tên đăng nhập hoặc mật khẩu không đúng",
+      });
     }
 
     const isMatch = await argon2.verify(user.password, password);
     if (!isMatch) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Tên đăng nhập hoặc mật khẩu không đúng",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Tên đăng nhập hoặc mật khẩu không đúng",
+      });
     }
 
     const token = generateToken(user);

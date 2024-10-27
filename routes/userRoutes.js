@@ -9,7 +9,7 @@ const {
 } = require("../controllers/userController");
 const { verifyToken, isAdmin } = require("../Middleware/Middleware");
 const User = require("../models/User");
-const argon2 = require('argon2');
+const argon2 = require("argon2");
 
 const router = express.Router();
 
@@ -20,16 +20,28 @@ router.put("/profile", verifyToken, updateUserProfile);
 
 router.get("/profile", verifyToken, getUserProfile);
 
-router.get("/getAllPatients",verifyToken , isAdmin , getAllPatients)
-router.get("/getAllDoctors",verifyToken , isAdmin , getAllDoctors)
+router.get("/getAllPatients", verifyToken, isAdmin, getAllPatients);
+router.get("/getAllDoctors", verifyToken, isAdmin, getAllDoctors);
 
 router.post("/create-admin", async (req, res) => {
-  const { username, email, password, fullName, phone, gender, dateOfBirth, address } = req.body;
+  const {
+    username,
+    email,
+    password,
+    fullName,
+    phone,
+    gender,
+    dateOfBirth,
+    address,
+  } = req.body;
 
   try {
     let user = await User.findOne({ $or: [{ email }, { username }] });
     if (user) {
-      return res.status(400).json({ success: false, message: "Email hoặc Tên đăng nhập đã được sử dụng" });
+      return res.status(400).json({
+        success: false,
+        message: "Email hoặc Tên đăng nhập đã được sử dụng",
+      });
     }
 
     const hashedPassword = await argon2.hash(password);
@@ -37,7 +49,7 @@ router.post("/create-admin", async (req, res) => {
       username,
       email,
       password: hashedPassword,
-      role: "admin", 
+      role: "admin",
       fullName,
       phone,
       gender,
