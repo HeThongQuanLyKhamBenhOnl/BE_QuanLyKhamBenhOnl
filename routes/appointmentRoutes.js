@@ -1,35 +1,62 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const { 
-  createAppointment, 
-  getAppointments, 
-  updateAppointmentStatus, 
-  cancelAppointment, 
+const {
+  createAppointment,
+  getAppointments,
+  updateAppointmentStatus,
+  cancelAppointment,
   getDoctorAppointments,
-  rescheduleAppointment ,
+  rescheduleAppointment,
   updateMedicalRecord,
-  getAllMedicalRecords
-} = require('../controllers/AppointmentController');
-const { verifyToken, isDoctor } = require('../Middleware/Middleware');
+  getAllMedicalRecords,
+  getUpdatedMedicalRecords,
+} = require("../controllers/AppointmentController");
+const { verifyToken, isDoctor } = require("../Middleware/Middleware");
 
 // Route để tạo lịch hẹn
-router.post('/appointments', verifyToken, createAppointment);
+router.post("/appointments", verifyToken, createAppointment);
 
-router.put('/medical-records/:recordId', verifyToken, isDoctor, updateMedicalRecord);
+router.put(
+  "/medical-records/:recordId",
+  verifyToken,
+  isDoctor,
+  updateMedicalRecord
+);
 
-router.get('/medical-records', verifyToken, isDoctor, getAllMedicalRecords);
+router.get("/medical-records", verifyToken, isDoctor, getAllMedicalRecords);
+
+router.get("/medical-records/updated", verifyToken, getUpdatedMedicalRecords);
 
 // Route để lấy danh sách lịch hẹn
-router.get('/appointments', verifyToken, getAppointments);
+router.get("/appointments", verifyToken, getAppointments);
 
 // Route để cập nhật trạng thái lịch hẹn
-router.put('/appointments/:appointmentId/status', verifyToken,isDoctor, updateAppointmentStatus);
+router.put(
+  "/appointments/:appointmentId/status",
+  verifyToken,
+  isDoctor,
+  updateAppointmentStatus
+);
 
-router.get('/appointments/doctor', verifyToken, isDoctor, getDoctorAppointments);
+router.get(
+  "/appointments/doctor",
+  verifyToken,
+  isDoctor,
+  getDoctorAppointments
+);
 // Route để hủy lịch hẹn
-router.put('/appointments/:appointmentId/cancel', verifyToken,isDoctor, cancelAppointment);
+router.put(
+  "/appointments/:appointmentId/cancel",
+  verifyToken,
+  isDoctor,
+  cancelAppointment
+);
 
 // Route để dời lịch hẹn
-router.put('/appointments/:appointmentId/reschedule', verifyToken, rescheduleAppointment);
+router.put(
+  "/appointments/:appointmentId/reschedule",
+  verifyToken,
+  rescheduleAppointment
+);
 
 module.exports = router;

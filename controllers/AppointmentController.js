@@ -112,6 +112,41 @@ exports.updateMedicalRecord = async (req, res) => {
   }
 };
 
+exports.getUpdatedMedicalRecords = async (req, res) => {
+  try {
+    // Lấy ID của bệnh nhân hiện tại
+    const patientId = req.user._id;
+
+    // Tìm tất cả hồ sơ bệnh án của bệnh nhân, bao gồm thông tin về bác sĩ và cuộc hẹn
+    const medicalRecords = await MedicalRecord.find({ patient: patientId })
+      .populate({
+        path: "doctor",
+        model: "User", // giả sử bác sĩ nằm trong bảng User
+        select: "fullName",
+        match: { role: "doctor" },
+      }) // Chỉ lấy thông tin bác sĩ cần thiết
+      .populate("appointment", "date startTime endTime") // Lấy thông tin cuộc hẹn
+      .lean();
+
+    // Lọc các hồ sơ bệnh án có thông tin cập nhật từ bác sĩ (ví dụ, có chuẩn đoán và phương pháp điều trị)
+    const updatedMedicalRecords = medicalRecords.filter(
+      (record) => record.diagnosis || record.treatment || record.notes
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Đã lấy hồ sơ bệnh án đã cập nhật",
+      medicalRecords: updatedMedicalRecords,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Đã xảy ra lỗi khi lấy hồ sơ bệnh án",
+      error: error.message,
+    });
+  }
+};
+
 exports.getAppointments = async (req, res) => {
   try {
     const appointments = await Appointment.find({ patient: req.user._id })
