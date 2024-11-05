@@ -2,8 +2,9 @@ const express = require("express");
 const { createDoctor } = require("../controllers/userController");
 const { verifyToken, isAdmin, isDoctor } = require("../Middleware/Middleware");
 const {
-  createDoctorSchedule,
+  createSchedule,
   getDoctorSchedule,
+  updateDoctorSchedule,
   getAllDoctors,
   getDoctorById,
   getDoctorProfile,
@@ -24,11 +25,14 @@ router.put(
 // Tạo tài khoản bác sĩ (chỉ dành cho admin, yêu cầu đã đăng nhập và có vai trò admin)
 router.post("/users/createDoctor", verifyToken, isAdmin, createDoctor);
 
-// Thêm lịch làm việc cho bác sĩ
-router.post("/schedule", verifyToken, isDoctor, createDoctorSchedule);
-
-// Lấy lịch làm việc của bác sĩ
-router.get("/schedule/me", verifyToken, isDoctor, getDoctorSchedule);
+router.post("/doctor/schedule", verifyToken, isDoctor, createSchedule);
+router.get("/doctor/schedule/me", verifyToken, isDoctor, getDoctorSchedule);
+router.put(
+  "/doctor/scheduleUpdate",
+  verifyToken,
+  isDoctor,
+  updateDoctorSchedule
+);
 
 // Lấy danh sách tất cả các bác sĩ
 router.get("/all", getAllDoctors);

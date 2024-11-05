@@ -23,7 +23,7 @@ router.put(
   updateMedicalRecord
 );
 
-router.get("/medical-records", verifyToken, isDoctor, getAllMedicalRecords);
+router.get("/medical-records/me", verifyToken, isDoctor, getAllMedicalRecords);
 
 router.get("/medical-records/updated", verifyToken, getUpdatedMedicalRecords);
 

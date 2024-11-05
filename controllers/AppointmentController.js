@@ -9,6 +9,30 @@ exports.createAppointment = async (req, res) => {
   try {
     const patientId = req.user._id;
 
+    // Tìm bác sĩ để lấy lịch làm việc dựa trên `userId` từ bảng User
+    const doctor = await Doctor.findOne({ user: doctorId });
+    if (!doctor) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Không tìm thấy bác sĩ" });
+    }
+
+    // Kiểm tra xem lịch làm việc có phù hợp và khả dụng không
+    const availableSlot = doctor.schedule.find(
+      (slot) =>
+        slot.date.toISOString() === new Date(date).toISOString() &&
+        slot.startTime === startTime &&
+        slot.endTime === endTime &&
+        slot.isAvailable
+    );
+
+    if (!availableSlot) {
+      return res.status(400).json({
+        success: false,
+        message: "Khung giờ này không khả dụng, vui lòng chọn giờ khác",
+      });
+    }
+
     // Tạo lịch hẹn mới
     const newAppointment = new Appointment({
       doctor: doctorId,
@@ -23,19 +47,18 @@ exports.createAppointment = async (req, res) => {
     // Lưu lịch hẹn vào cơ sở dữ liệu
     await newAppointment.save();
 
-    // Cập nhật mảng appointments trong Doctor model
-    await Doctor.findByIdAndUpdate(doctorId, {
-      $push: { appointments: newAppointment._id }, // Thêm ID của lịch hẹn vào mảng appointments
-    });
+    // Đánh dấu lịch làm việc là không khả dụng
+    availableSlot.isAvailable = false;
+    doctor.appointments.push(newAppointment._id);
+    await doctor.save();
 
-    // Sau khi tạo lịch hẹn, tạo hồ sơ bệnh án cho lịch hẹn này
+    // Tạo hồ sơ bệnh án cho lịch hẹn này
     const newMedicalRecord = new MedicalRecord({
       patient: patientId,
-      doctor: doctorId,
+      doctor: doctor._id,
       appointment: newAppointment._id,
     });
 
-    // Lưu hồ sơ bệnh án
     await newMedicalRecord.save();
 
     res.status(201).json({
@@ -159,7 +182,7 @@ exports.getAppointments = async (req, res) => {
       .populate("patient", "fullName")
       .lean();
 
-    // Thêm thông tin doctor từ bảng Doctor
+    // Thêm thông tin từ bảng Doctor
     const populatedAppointments = await Promise.all(
       appointments.map(async (appointment) => {
         if (appointment.doctor) {
@@ -171,10 +194,14 @@ exports.getAppointments = async (req, res) => {
 
           return {
             ...appointment,
-            doctor: {
-              ...appointment.doctor,
-              ...doctorInfo,
-            },
+            doctor: doctorInfo
+              ? {
+                  ...appointment.doctor,
+                  specialty: doctorInfo.specialty || "Không có chuyên khoa",
+                  experience: doctorInfo.experience || 0,
+                  qualifications: doctorInfo.qualifications || [],
+                }
+              : appointment.doctor,
           };
         }
         return appointment;
@@ -263,7 +290,6 @@ exports.cancelAppointment = async (req, res) => {
   const { appointmentId } = req.params;
 
   try {
-    // Tìm và xóa lịch hẹn
     const appointment = await Appointment.findByIdAndDelete(appointmentId);
 
     if (!appointment) {
@@ -273,7 +299,24 @@ exports.cancelAppointment = async (req, res) => {
       });
     }
 
-    // Kiểm tra xem cuộc hẹn có hồ sơ bệnh án không, nếu có thì xóa
+    // Cập nhật trạng thái isAvailable cho lịch làm việc của bác sĩ
+    const doctor = await Doctor.findById(appointment.doctor);
+    if (doctor) {
+      const scheduleSlot = doctor.schedule.find(
+        (slot) =>
+          slot.date.toISOString() ===
+            new Date(appointment.date).toISOString() &&
+          slot.startTime === appointment.startTime &&
+          slot.endTime === appointment.endTime
+      );
+
+      if (scheduleSlot) {
+        scheduleSlot.isAvailable = true;
+        await doctor.save();
+      }
+    }
+
+    // Xóa hồ sơ bệnh án nếu có
     if (appointment.medicalRecord) {
       await MedicalRecord.findByIdAndDelete(appointment.medicalRecord);
     }
@@ -297,7 +340,6 @@ exports.rescheduleAppointment = async (req, res) => {
   const { date, startTime, endTime } = req.body;
 
   try {
-    // Tìm lịch hẹn theo ID
     const appointment = await Appointment.findById(appointmentId);
 
     if (!appointment) {
@@ -307,7 +349,6 @@ exports.rescheduleAppointment = async (req, res) => {
       });
     }
 
-    // Chỉ cho phép dời lịch hẹn nếu trạng thái là "pending" hoặc "confirmed"
     if (
       appointment.status === "completed" ||
       appointment.status === "cancelled"
@@ -318,14 +359,42 @@ exports.rescheduleAppointment = async (req, res) => {
       });
     }
 
-    // Cập nhật ngày và giờ cho lịch hẹn
+    // Đánh dấu lịch cũ là khả dụng
+    const doctor = await Doctor.findById(appointment.doctor);
+    const oldSlot = doctor.schedule.find(
+      (slot) =>
+        slot.date.toISOString() === new Date(appointment.date).toISOString() &&
+        slot.startTime === appointment.startTime &&
+        slot.endTime === appointment.endTime
+    );
+
+    if (oldSlot) oldSlot.isAvailable = true;
+
+    // Kiểm tra lịch mới có khả dụng không
+    const newSlot = doctor.schedule.find(
+      (slot) =>
+        slot.date.toISOString() === new Date(date).toISOString() &&
+        slot.startTime === startTime &&
+        slot.endTime === endTime &&
+        slot.isAvailable
+    );
+
+    if (!newSlot) {
+      return res.status(400).json({
+        success: false,
+        message: "Khung giờ mới không khả dụng, vui lòng chọn giờ khác",
+      });
+    }
+
+    // Cập nhật lịch hẹn với thời gian mới và đánh dấu khung giờ mới là không khả dụng
     appointment.date = date;
     appointment.startTime = startTime;
     appointment.endTime = endTime;
-    appointment.status = "pending"; // Đặt lại trạng thái về "pending" sau khi dời lịch
-
-    // Lưu lịch hẹn đã cập nhật
+    appointment.status = "pending";
     await appointment.save();
+
+    newSlot.isAvailable = false;
+    await doctor.save();
 
     res.status(200).json({
       success: true,
