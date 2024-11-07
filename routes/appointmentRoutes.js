@@ -10,6 +10,7 @@ const {
   updateMedicalRecord,
   getAllMedicalRecords,
   getUpdatedMedicalRecords,
+  getDoctorMedicalRecords,
 } = require("../controllers/AppointmentController");
 const { verifyToken, isDoctor } = require("../Middleware/Middleware");
 
@@ -24,6 +25,12 @@ router.put(
 );
 
 router.get("/medical-records/me", verifyToken, isDoctor, getAllMedicalRecords);
+router.get(
+  "/medical-records/doctor",
+  verifyToken,
+  isDoctor,
+  getDoctorMedicalRecords
+);
 
 router.get("/medical-records/updated", verifyToken, getUpdatedMedicalRecords);
 

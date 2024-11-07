@@ -8,33 +8,30 @@ const isValidObjectId = (id) => {
 
 exports.updateDoctorSchedule = async (req, res) => {
   const doctorId = req.user._id;
-  const { scheduleId, date, startTime, endTime, isAvailable } = req.body;
+  const { scheduleId, date, shift, isAvailable } = req.body;
 
   try {
-    // Tìm bác sĩ dựa trên ID
     const doctor = await Doctor.findOne({ user: doctorId });
-
     if (!doctor) {
       return res
         .status(404)
         .json({ success: false, message: "Bác sĩ không tồn tại" });
     }
 
-    // Tìm lịch làm việc theo ID trong danh sách schedule
     const schedule = doctor.schedule.id(scheduleId);
-
     if (!schedule) {
       return res
         .status(404)
         .json({ success: false, message: "Không tìm thấy lịch làm việc" });
     }
 
-    // Cập nhật lịch làm việc với thông tin mới
     schedule.date = date || schedule.date;
-    schedule.startTime = startTime || schedule.startTime;
-    schedule.endTime = endTime || schedule.endTime;
+    schedule.shift = shift || schedule.shift;
     schedule.isAvailable =
       isAvailable !== undefined ? isAvailable : schedule.isAvailable;
+
+    // Đánh dấu rằng schedule đã được thay đổi
+    doctor.markModified("schedule");
 
     await doctor.save();
 
@@ -79,11 +76,10 @@ exports.getDoctorSchedule = async (req, res) => {
 };
 
 exports.createSchedule = async (req, res) => {
-  const { date, startTime, endTime } = req.body;
-  const doctorId = req.user._id; // Giả sử ID của bác sĩ được lưu trong req.user
+  const { date, shift } = req.body;
+  const doctorId = req.user._id;
 
   try {
-    // Tìm bác sĩ dựa trên ID
     const doctor = await Doctor.findOne({ user: doctorId });
 
     if (!doctor) {
@@ -92,25 +88,20 @@ exports.createSchedule = async (req, res) => {
         .json({ success: false, message: "Bác sĩ không tồn tại" });
     }
 
-    // Kiểm tra xem đã có lịch trong cùng ngày và giờ chưa
+    // Kiểm tra trùng lặp theo ngày và ca làm việc
     const isConflict = doctor.schedule.some(
       (slot) =>
         slot.date.toISOString() === new Date(date).toISOString() &&
-        slot.startTime === startTime &&
-        slot.endTime === endTime
+        slot.shift === shift
     );
 
     if (isConflict) {
-      return res.status(400).json({
-        success: false,
-        message: "Lịch làm việc này đã tồn tại, vui lòng chọn giờ khác",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "Ca làm việc này đã tồn tại" });
     }
 
-    // Thêm lịch làm việc mới vào danh sách
-    doctor.schedule.push({ date, startTime, endTime, isAvailable: true });
-
-    // Lưu lại lịch làm việc của bác sĩ
+    doctor.schedule.push({ date, shift, isAvailable: true });
     await doctor.save();
 
     res.status(201).json({
