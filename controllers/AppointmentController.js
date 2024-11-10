@@ -1,6 +1,7 @@
 const Appointment = require("../models/Appointment");
 const Doctor = require("../models/Doctor");
 const MedicalRecord = require("../models/MedicalRecord");
+const Medicine = require("../models/Medicine");
 
 exports.createAppointment = async (req, res) => {
   const { doctorId, date, shift, reasonForVisit, notes } = req.body;
@@ -38,7 +39,6 @@ exports.createAppointment = async (req, res) => {
 
     await newAppointment.save();
 
-    availableSlot.isAvailable = false;
     doctor.appointments.push(newAppointment._id);
     await doctor.save();
 
@@ -86,6 +86,7 @@ exports.getDoctorMedicalRecords = async (req, res) => {
         match: { doctor: doctorId },
         select: "date shift reasonForVisit status", // Thông tin cuộc hẹn liên quan
       })
+      .populate("prescribedMedicines.medicine", "name")
       .lean();
 
     // Lọc ra các hồ sơ có lịch hẹn cụ thể với bác sĩ
@@ -131,12 +132,10 @@ exports.getAllMedicalRecords = async (req, res) => {
 
 exports.updateMedicalRecord = async (req, res) => {
   const { recordId } = req.params;
-  const { diagnosis, treatment, notes } = req.body;
+  const { diagnosis, treatment, notes, prescribedMedicines } = req.body;
 
   try {
-    // Tìm hồ sơ bệnh án theo ID
     const medicalRecord = await MedicalRecord.findById(recordId);
-
     if (!medicalRecord) {
       return res.status(404).json({
         success: false,
@@ -144,14 +143,51 @@ exports.updateMedicalRecord = async (req, res) => {
       });
     }
 
-    // Cập nhật thông tin hồ sơ bệnh án
     medicalRecord.diagnosis = diagnosis || medicalRecord.diagnosis;
     medicalRecord.treatment = treatment || medicalRecord.treatment;
     medicalRecord.notes = notes || medicalRecord.notes;
-    medicalRecord.updatedAt = Date.now();
 
-    // Lưu hồ sơ bệnh án đã cập nhật
-    await medicalRecord.save(); // Đảm bảo đã có await ở đây để thực sự lưu lại thay đổi
+    if (prescribedMedicines && prescribedMedicines.length > 0) {
+      console.log("Received prescribedMedicines:", prescribedMedicines);
+
+      const newPrescriptions = await Promise.all(
+        prescribedMedicines.map(async (item) => {
+          const medicine = await Medicine.findById(item.medicine);
+          if (!medicine) {
+            throw new Error(`Không tìm thấy thuốc với ID ${item.medicine}`);
+          }
+
+          if (medicine.stock < item.quantity) {
+            throw new Error(`Không đủ ${medicine.name} trong kho`);
+          }
+
+          // Cập nhật tồn kho
+          medicine.stock -= item.quantity;
+          await medicine.save();
+
+          console.log(
+            `Processed medicine: ${medicine.name}, quantity: ${item.quantity}, price: ${medicine.price}`
+          );
+
+          return {
+            medicine: item.medicine,
+            quantity: item.quantity,
+            price: medicine.price,
+            total: item.quantity * medicine.price,
+          };
+        })
+      );
+
+      console.log("New prescriptions before saving:", newPrescriptions);
+      medicalRecord.prescribedMedicines = newPrescriptions;
+    } else {
+      console.log("No prescribedMedicines to update.");
+    }
+
+    medicalRecord.updatedAt = Date.now();
+    await medicalRecord.save();
+
+    console.log("Updated medical record in DB:", medicalRecord);
 
     res.status(200).json({
       success: true,
@@ -159,6 +195,7 @@ exports.updateMedicalRecord = async (req, res) => {
       medicalRecord,
     });
   } catch (error) {
+    console.error("Error updating medical record:", error.message);
     res.status(500).json({
       success: false,
       message: "Đã xảy ra lỗi khi cập nhật hồ sơ bệnh án",
@@ -180,7 +217,8 @@ exports.getUpdatedMedicalRecords = async (req, res) => {
         select: "fullName",
         match: { role: "doctor" },
       }) // Chỉ lấy thông tin bác sĩ cần thiết
-      .populate("appointment", "date startTime endTime") // Lấy thông tin cuộc hẹn
+      .populate("appointment", "date startTime endTime")
+      .populate("prescribedMedicines.medicine", "name")
       .lean();
 
     // Lọc các hồ sơ bệnh án có thông tin cập nhật từ bác sĩ (ví dụ, có chuẩn đoán và phương pháp điều trị)
