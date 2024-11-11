@@ -2,9 +2,12 @@ const Appointment = require("../models/Appointment");
 const Doctor = require("../models/Doctor");
 const MedicalRecord = require("../models/MedicalRecord");
 const Medicine = require("../models/Medicine");
+const sendEmail = require("../config/mailer");
+const User = require("../models/User");
+const mongoose = require("mongoose");
 
 exports.createAppointment = async (req, res) => {
-  const { doctorId, date, shift, reasonForVisit, notes } = req.body;
+  const { doctorId, date, shift, reasonForVisit, notes, status } = req.body;
 
   try {
     const patientId = req.user._id;
@@ -35,6 +38,7 @@ exports.createAppointment = async (req, res) => {
       shift,
       reasonForVisit,
       notes,
+      status,
     });
 
     await newAppointment.save();
@@ -43,6 +47,7 @@ exports.createAppointment = async (req, res) => {
     await doctor.save();
 
     // Tạo hồ sơ bệnh án cho lịch hẹn này
+
     const newMedicalRecord = new MedicalRecord({
       patient: patientId,
       doctor: doctorId,
@@ -50,6 +55,35 @@ exports.createAppointment = async (req, res) => {
     });
 
     await newMedicalRecord.save();
+
+    // Lấy thông tin bệnh nhân và bác sĩ để gửi email
+    const patient = await User.findById(patientId);
+    const doctorUser = await User.findById(doctor.user);
+
+    if (patient && patient.email) {
+      const to = patient.email;
+      const subject = "Xác nhận lịch hẹn";
+      const text = `Chào ${patient.fullName},
+
+Lịch hẹn của bạn với bác sĩ ${doctorUser.fullName} vào ngày ${new Date(
+        date
+      ).toLocaleDateString()} ca ${shift} đã được đặt thành công.
+
+Lý do khám: ${reasonForVisit}
+Ghi chú: ${notes}
+Trạng thái:${status}
+
+Cảm ơn bạn,
+Tên phòng khám`;
+
+      try {
+        await sendEmail(to, subject, text);
+      } catch (emailError) {
+        console.error("Lỗi khi gửi email:", emailError);
+      }
+    } else {
+      console.error("Không tìm thấy email của bệnh nhân.");
+    }
 
     res.status(201).json({
       success: true,
@@ -83,7 +117,7 @@ exports.getDoctorMedicalRecords = async (req, res) => {
       .populate("patient", "fullName dateOfBirth gender") // Thông tin của bệnh nhân
       .populate({
         path: "appointment",
-        match: { doctor: doctorId },
+        match: { doctor: doctorId, status: "Completed" },
         select: "date shift reasonForVisit status", // Thông tin cuộc hẹn liên quan
       })
       .populate("prescribedMedicines.medicine", "name")
@@ -91,7 +125,8 @@ exports.getDoctorMedicalRecords = async (req, res) => {
 
     // Lọc ra các hồ sơ có lịch hẹn cụ thể với bác sĩ
     const recordsWithAppointment = medicalRecords.filter(
-      (record) => record.appointment
+      (record) =>
+        record.appointment && record.appointment.status === "Completed"
     );
 
     res.status(200).json({
@@ -135,7 +170,10 @@ exports.updateMedicalRecord = async (req, res) => {
   const { diagnosis, treatment, notes, prescribedMedicines } = req.body;
 
   try {
-    const medicalRecord = await MedicalRecord.findById(recordId);
+    const medicalRecord = await MedicalRecord.findById(recordId).populate(
+      "patient",
+      "fullName email"
+    );
     if (!medicalRecord) {
       return res.status(404).json({
         success: false,
@@ -187,7 +225,38 @@ exports.updateMedicalRecord = async (req, res) => {
     medicalRecord.updatedAt = Date.now();
     await medicalRecord.save();
 
-    console.log("Updated medical record in DB:", medicalRecord);
+    // Gửi email hồ sơ bệnh án đã cập nhật cho bệnh nhân
+    if (medicalRecord.patient && medicalRecord.patient.email) {
+      const to = medicalRecord.patient.email;
+      const subject = "Cập nhật hồ sơ bệnh án";
+      const text = `Chào ${medicalRecord.patient.fullName},
+
+Hồ sơ bệnh án của bạn đã được cập nhật với các thông tin sau:
+
+Chẩn đoán: ${medicalRecord.diagnosis}
+Phác đồ điều trị: ${medicalRecord.treatment}
+Ghi chú: ${medicalRecord.notes}
+
+Đơn thuốc:
+${medicalRecord.prescribedMedicines
+  .map(
+    (item) =>
+      `- ${item.quantity} x ${item.medicine.name} (Giá: ${item.price}, Tổng: ${item.total})`
+  )
+  .join("\n")}
+
+Cảm ơn bạn,
+Tên phòng khám`;
+
+      try {
+        await sendEmail(to, subject, text);
+        console.log("Email đã được gửi thành công tới bệnh nhân");
+      } catch (emailError) {
+        console.error("Lỗi khi gửi email:", emailError);
+      }
+    } else {
+      console.error("Không tìm thấy email của bệnh nhân.");
+    }
 
     res.status(200).json({
       success: true,
@@ -358,15 +427,46 @@ exports.updateAppointmentStatus = async (req, res) => {
 // Hủy lịch hẹn
 exports.cancelAppointment = async (req, res) => {
   const { appointmentId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(appointmentId)) {
+    return res.status(400).json({
+      success: false,
+      message: "ID cuộc hẹn không hợp lệ",
+    });
+  }
 
   try {
-    const appointment = await Appointment.findByIdAndDelete(appointmentId);
-    if (!appointment)
-      return res
-        .status(404)
-        .json({ success: false, message: "Không tìm thấy lịch hẹn" });
+    // Tìm cuộc hẹn theo ID
+    const appointment = await Appointment.findById(appointmentId);
+    if (!appointment) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy lịch hẹn",
+      });
+    }
 
-    const doctor = await Doctor.findById(appointment.doctor);
+    // Kiểm tra trạng thái cuộc hẹn
+    if (appointment.status === "Completed") {
+      return res.status(400).json({
+        success: false,
+        message: "Không thể hủy cuộc hẹn đã hoàn thành",
+      });
+    }
+
+    // Xóa lịch hẹn khỏi danh sách của bác sĩ
+    const doctor = await Doctor.findOne({ user: appointment.doctor });
+    if (!doctor) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy bác sĩ liên quan đến lịch hẹn này",
+      });
+    }
+
+    // Xóa ID cuộc hẹn khỏi danh sách của bác sĩ
+    doctor.appointments = doctor.appointments.filter(
+      (id) => !id.equals(appointment._id)
+    );
+
+    // Tìm và cập nhật slot trong lịch của bác sĩ thành khả dụng
     const scheduleSlot = doctor.schedule.find(
       (slot) =>
         slot.date.toISOString() === new Date(appointment.date).toISOString() &&
@@ -375,12 +475,19 @@ exports.cancelAppointment = async (req, res) => {
 
     if (scheduleSlot) {
       scheduleSlot.isAvailable = true;
-      await doctor.save();
     }
+
+    await doctor.save();
+
+    // Xóa hồ sơ bệnh án liên quan đến cuộc hẹn
+    await MedicalRecord.findOneAndDelete({ appointment: appointmentId });
+
+    // Xóa cuộc hẹn
+    await Appointment.findByIdAndDelete(appointmentId);
 
     res.status(200).json({
       success: true,
-      message: "Lịch hẹn và hồ sơ bệnh án liên quan (nếu có) đã bị xóa",
+      message: "Lịch hẹn đã bị hủy thành công",
     });
   } catch (error) {
     res.status(500).json({

@@ -2,6 +2,7 @@ const User = require("../models/User");
 const argon2 = require("argon2");
 const { generateToken } = require("../Middleware/Middleware");
 const Doctor = require("../models/Doctor");
+const sendEmail = require("../config/mailer");
 
 exports.registerUser = async (req, res) => {
   const {
@@ -302,6 +303,45 @@ exports.getAllDoctors = async (req, res) => {
     res.status(200).json({
       success: true,
       doctors: mergedDoctors,
+    });
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).json({ success: false, message: "Lỗi máy chủ" });
+  }
+};
+
+exports.forgotPassword = async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    // Kiểm tra xem email có tồn tại trong hệ thống không
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Email không tồn tại trong hệ thống",
+      });
+    }
+
+    // Tạo một mật khẩu mới gồm 6 ký tự số
+    const newPassword = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Mã hoá mật khẩu mới
+    const hashedPassword = await argon2.hash(newPassword);
+
+    // Cập nhật mật khẩu của người dùng trong cơ sở dữ liệu
+    user.password = hashedPassword;
+    await user.save();
+
+    // Gửi mật khẩu mới tới email của người dùng
+    const emailSubject = "Mật khẩu mới của bạn";
+    const emailText = `Mật khẩu mới của bạn là: ${newPassword}. Hãy đăng nhập và thay đổi mật khẩu của bạn.`;
+
+    await sendEmail(email, emailSubject, emailText);
+
+    res.status(200).json({
+      success: true,
+      message: "Mật khẩu mới đã được gửi về email của bạn",
     });
   } catch (error) {
     console.error(error.message);

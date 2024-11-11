@@ -6,6 +6,7 @@ const {
   getUserProfile,
   getAllPatients,
   getAllDoctors,
+  forgotPassword,
 } = require("../controllers/userController");
 const { verifyToken, isAdmin } = require("../Middleware/Middleware");
 const User = require("../models/User");
@@ -17,6 +18,7 @@ const router = express.Router();
 router.post("/register", registerUser);
 router.post("/login", loginUser);
 router.put("/profile", verifyToken, updateUserProfile);
+router.post("/forgot-password", forgotPassword);
 
 router.get("/profile", verifyToken, getUserProfile);
 

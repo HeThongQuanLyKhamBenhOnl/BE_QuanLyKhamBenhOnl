@@ -52,7 +52,7 @@ router.get(
   getDoctorAppointments
 );
 // Route để hủy lịch hẹn
-router.put(
+router.delete(
   "/appointments/:appointmentId/cancel",
   verifyToken,
   isDoctor,
