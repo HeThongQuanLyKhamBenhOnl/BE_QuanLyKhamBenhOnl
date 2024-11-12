@@ -1,5 +1,5 @@
 # Sử dụng hình ảnh Node.js phiên bản 16
-FROM node:16
+FROM node:18
 
 # Tạo thư mục làm việc trong container
 WORKDIR /app
