@@ -1,0 +1,30 @@
+version: "3.8"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - MONGODB_URL=mongodb+srv://myle2002:myle2112002@benhvienonl.upg9x.mongodb.net/BenhVienOnline?retryWrites=true&w=majority
+      - EMAIL_USER="mynho1132002@gmail.com"
+      - EMAIL_PASS="mtjouktcjmuhlwbm"
+      - JWT_SECRET=323211112412
+    depends_on:
+      - db
+
+  db:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
