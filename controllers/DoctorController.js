@@ -119,7 +119,7 @@ exports.createSchedule = async (req, res) => {
 };
 
 exports.getDoctorProfile = async (req, res) => {
-  const userId = req.user.id; // Lấy userId từ token sau khi xác thực
+  const userId = req.user.id;
 
   if (!isValidObjectId(userId)) {
     return res
@@ -148,7 +148,7 @@ exports.getDoctorProfile = async (req, res) => {
   }
 };
 
-// Cập nhật thông tin cá nhân của doctor
+const { uploadImage } = require("../config/cloudinaryConfig");
 exports.updateDoctorProfile = async (req, res) => {
   const { specialty, experience, qualifications } = req.body;
 
@@ -165,6 +165,19 @@ exports.updateDoctorProfile = async (req, res) => {
     doctor.specialty = specialty || doctor.specialty;
     doctor.experience = experience || doctor.experience;
     doctor.qualifications = qualifications || doctor.qualifications;
+
+    // Kiểm tra và upload ảnh mới nếu có
+    if (req.files && req.files.length > 0) {
+      const imageUrls = [];
+
+      for (const file of req.files) {
+        const imageUrl = await uploadImage(file.path); // Upload ảnh và lấy URL
+        imageUrls.push(imageUrl);
+      }
+
+      // Giới hạn tối đa 5 ảnh và cập nhật vào doctor.images
+      doctor.images = [...doctor.images, ...imageUrls].slice(0, 5);
+    }
 
     await doctor.save();
 

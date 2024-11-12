@@ -27,7 +27,7 @@ const doctorSchema = new mongoose.Schema({
       },
       shift: {
         type: String,
-        enum: ["morning", "afternoon", "evening"], // Các ca làm việc
+        enum: ["morning", "afternoon", "evening"],
         required: true,
       },
       isAvailable: {
@@ -55,6 +55,10 @@ const doctorSchema = new mongoose.Schema({
   updatedAt: {
     type: Date,
     default: Date.now,
+  },
+  images: {
+    type: [String],
+    default: [],
   },
 });
 

@@ -10,15 +10,18 @@ const {
   getDoctorProfile,
   updateDoctorProfile,
 } = require("../controllers/DoctorController");
+const { upload } = require("../config/cloudinaryConfig");
 const router = express.Router();
 
 router.get("/doctor/profile", verifyToken, isDoctor, getDoctorProfile);
 
 router.get("/doctor/:userId", getDoctorById);
+
 router.put(
   "/doctor/profile/update",
   verifyToken,
   isDoctor,
+  upload.array("images", 5),
   updateDoctorProfile
 );
 
