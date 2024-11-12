@@ -5,6 +5,7 @@ const Medicine = require("../models/Medicine");
 const sendEmail = require("../config/mailer");
 const User = require("../models/User");
 const mongoose = require("mongoose");
+const Chat = require("../models/Chat");
 
 exports.createAppointment = async (req, res) => {
   const { doctorId, date, shift, reasonForVisit, notes, status } = req.body;
@@ -46,8 +47,6 @@ exports.createAppointment = async (req, res) => {
     doctor.appointments.push(newAppointment._id);
     await doctor.save();
 
-    // Tạo hồ sơ bệnh án cho lịch hẹn này
-
     const newMedicalRecord = new MedicalRecord({
       patient: patientId,
       doctor: doctorId,
@@ -56,7 +55,6 @@ exports.createAppointment = async (req, res) => {
 
     await newMedicalRecord.save();
 
-    // Lấy thông tin bệnh nhân và bác sĩ để gửi email
     const patient = await User.findById(patientId);
     const doctorUser = await User.findById(doctor.user);
 
@@ -391,11 +389,10 @@ exports.getDoctorAppointments = async (req, res) => {
   }
 };
 
-// Cập nhật trạng thái lịch hẹn
+
 exports.updateAppointmentStatus = async (req, res) => {
   const { appointmentId } = req.params;
   const { status } = req.body;
-
   try {
     const appointment = await Appointment.findByIdAndUpdate(
       appointmentId,
@@ -410,6 +407,23 @@ exports.updateAppointmentStatus = async (req, res) => {
       });
     }
 
+    if (status === "confirmed") {
+      const existingChat = await Chat.findOne({
+        doctorId: appointment.doctor,
+        patientId: appointment.patient,
+        appointmentId: appointment._id,
+      });
+
+      if (!existingChat) {
+        const newChat = new Chat({
+          doctorId: appointment.doctor,
+          patientId: appointment.patient,
+          appointmentId: appointment._id,
+          messages: [],
+        });
+        await newChat.save();
+      }
+    }
     res.status(200).json({
       success: true,
       message: "Trạng thái lịch hẹn đã được cập nhật",

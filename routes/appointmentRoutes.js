@@ -14,7 +14,7 @@ const {
 } = require("../controllers/AppointmentController");
 const { verifyToken, isDoctor } = require("../Middleware/Middleware");
 
-// Route để tạo lịch hẹn
+
 router.post("/appointments", verifyToken, createAppointment);
 
 router.put(
