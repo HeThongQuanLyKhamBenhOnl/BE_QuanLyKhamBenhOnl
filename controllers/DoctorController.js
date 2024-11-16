@@ -223,6 +223,7 @@ exports.getAllDoctors = async (req, res) => {
       schedule: doctor.schedule,
       patients: doctor.patients,
       appointments: doctor.appointments,
+      images: doctor.images,
     }));
     res.status(200).json({
       success: true,

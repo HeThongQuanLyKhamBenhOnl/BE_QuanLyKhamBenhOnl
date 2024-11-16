@@ -389,7 +389,6 @@ exports.getDoctorAppointments = async (req, res) => {
   }
 };
 
-
 exports.updateAppointmentStatus = async (req, res) => {
   const { appointmentId } = req.params;
   const { status } = req.body;
@@ -407,7 +406,7 @@ exports.updateAppointmentStatus = async (req, res) => {
       });
     }
 
-    if (status === "confirmed") {
+    if (status === "Completed") {
       const existingChat = await Chat.findOne({
         doctorId: appointment.doctor,
         patientId: appointment.patient,

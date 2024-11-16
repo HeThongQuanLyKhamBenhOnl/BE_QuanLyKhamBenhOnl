@@ -27,7 +27,7 @@ app.use("/api/users", require("./routes/userRoutes"));
 app.use("/api", require("./routes/doctorRoutes"));
 app.use("/api", require("./routes/appointmentRoutes"));
 app.use("/api", require("./routes/medicineRoutes"));
-app.use("/api/chats", require("./routes/chatRoutes"));
+app.use("/api", require("./routes/chatRoutes"));
 
 // Middleware xử lý lỗi
 app.use((err, req, res, next) => {
