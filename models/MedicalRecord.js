@@ -32,22 +32,33 @@ const medicalRecordSchema = new mongoose.Schema({
     {
       medicine: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Medicine", // Liên kết với model Medicine
+        ref: "Medicine", 
       },
       quantity: {
         type: Number,
         required: true,
       },
       price: {
-        type: Number, // Giá bán của thuốc tại thời điểm kê toa
+        type: Number,
         required: true,
       },
       total: {
-        type: Number, // Tổng giá tiền của thuốc (price * quantity)
+        type: Number, 
         required: true,
       },
     },
   ],
+  paymentStatus: {
+    type: String,
+    enum: ["Unpaid", "Paid", "Pending"],
+    default: "Unpaid",
+  },
+  paymentLink: {
+    type: String,
+  },
+  orderCode: {
+    type: Number,
+  },
   createdAt: {
     type: Date,
     default: Date.now,

@@ -7,6 +7,198 @@ const User = require("../models/User");
 const mongoose = require("mongoose");
 const Chat = require("../models/Chat");
 
+const PayOS = require("@payos/node");
+
+const payos = new PayOS(
+  process.env.PAYOS_CLIENT_ID,
+  process.env.PAYOS_API_KEY,
+  process.env.PAYOS_CHECKSUM_KEY
+);
+
+exports.updateMedicalRecord = async (req, res) => {
+  const { recordId } = req.params;
+  const { diagnosis, treatment, notes, prescribedMedicines } = req.body;
+
+  try {
+    const medicalRecord = await MedicalRecord.findById(recordId).populate(
+      "patient",
+      "fullName email"
+    );
+
+    if (!medicalRecord) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy hồ sơ bệnh án",
+      });
+    }
+
+    // Update basic fields
+    medicalRecord.diagnosis = diagnosis || medicalRecord.diagnosis;
+    medicalRecord.treatment = treatment || medicalRecord.treatment;
+    medicalRecord.notes = notes || medicalRecord.notes;
+
+    let totalCost = 0;
+
+    // Process prescribed medicines
+    if (prescribedMedicines && prescribedMedicines.length > 0) {
+      const updatedMedicines = await Promise.all(
+        prescribedMedicines.map(async (item) => {
+          const medicine = await Medicine.findById(item.medicine);
+          if (!medicine) {
+            throw new Error(`Không tìm thấy thuốc với ID ${item.medicine}`);
+          }
+
+          if (medicine.stock < item.quantity) {
+            throw new Error(`Không đủ ${medicine.name} trong kho`);
+          }
+
+          // Deduct stock
+          medicine.stock -= item.quantity;
+          await medicine.save();
+
+          const total = item.quantity * medicine.price;
+          totalCost += total;
+
+          return {
+            medicine: item.medicine,
+            quantity: item.quantity,
+            price: medicine.price,
+            total,
+            paymentStatus: "Unpaid",
+          };
+        })
+      );
+
+      medicalRecord.prescribedMedicines = updatedMedicines;
+    }
+
+    // Generate payment link if there's a cost
+    if (totalCost > 0) {
+      const orderCode = Math.floor(Math.random() * 1000000000); // Shorter order code
+      const paymentData = {
+        orderCode,
+        amount: totalCost,
+        description: "Thanh toán đơn thuốc",
+        returnUrl: `${process.env.DOMAIN_URL}/api/medical-records/payment-success?orderCode=${orderCode}`,
+        cancelUrl: `${process.env.DOMAIN_URL}/api/medical-records/payment-cancel?orderCode=${orderCode}`,
+      };
+
+      const paymentResponse = await payos.createPaymentLink(paymentData);
+
+      if (paymentResponse.status === "PENDING") {
+        medicalRecord.paymentLink = paymentResponse.checkoutUrl;
+        medicalRecord.qrCode = paymentResponse.qrCode;
+        medicalRecord.paymentStatus = "Pending";
+        medicalRecord.orderCode = orderCode;
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: "Không thể tạo liên kết thanh toán",
+          error: paymentResponse.message,
+        });
+      }
+    } else {
+      medicalRecord.paymentStatus = "Unpaid";
+    }
+
+    // Save updated medical record
+    medicalRecord.updatedAt = Date.now();
+    await medicalRecord.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Hồ sơ bệnh án đã được cập nhật thành công",
+      medicalRecord: {
+        ...medicalRecord.toObject(),
+        paymentLink: medicalRecord.paymentLink,
+        qrCode: medicalRecord.qrCode,
+      },
+    });
+  } catch (error) {
+    console.error("Error updating medical record:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Đã xảy ra lỗi khi cập nhật hồ sơ bệnh án",
+      error: error.message,
+    });
+  }
+};
+
+exports.handlePaymentSuccess = async (req, res) => {
+  const { orderCode, status } = req.query;
+
+  try {
+    // Validate orderCode and payment status
+    if (!orderCode || (status !== "PAID" && status !== "SUCCESS")) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid payment callback data",
+      });
+    }
+
+    // Find the medical record with the given orderCode
+    const medicalRecord = await MedicalRecord.findOne({ orderCode });
+    if (!medicalRecord) {
+      return res.status(404).json({
+        success: false,
+        message: "Medical record not found for the provided order code",
+      });
+    }
+
+    // Only update if the current status is not already Paid
+    if (medicalRecord.paymentStatus !== "Paid") {
+      medicalRecord.paymentStatus = "Paid";
+      await medicalRecord.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Payment successful, medical record updated",
+      medicalRecord,
+    });
+  } catch (error) {
+    console.error("Error handling payment success:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Error processing payment success",
+      error: error.message,
+    });
+  }
+};
+exports.handlePaymentCancellation = async (req, res) => {
+  const { orderCode } = req.query;
+  try {
+    if (!orderCode) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid payment cancellation data",
+      });
+    }
+    const medicalRecord = await MedicalRecord.findOne({ orderCode });
+    if (!medicalRecord) {
+      return res.status(404).json({
+        success: false,
+        message: "Medical record not found for the provided order code",
+      });
+    }
+    medicalRecord.paymentStatus = "Unpaid";
+    await medicalRecord.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Payment canceled, medical record updated",
+      medicalRecord,
+    });
+  } catch (error) {
+    console.error("Error handling payment cancellation:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Error processing payment cancellation",
+      error: error.message,
+    });
+  }
+};
+
 exports.createAppointment = async (req, res) => {
   const { doctorId, date, shift, reasonForVisit, notes, status } = req.body;
 
@@ -162,115 +354,6 @@ exports.getAllMedicalRecords = async (req, res) => {
     });
   }
 };
-
-exports.updateMedicalRecord = async (req, res) => {
-  const { recordId } = req.params;
-  const { diagnosis, treatment, notes, prescribedMedicines } = req.body;
-
-  try {
-    const medicalRecord = await MedicalRecord.findById(recordId).populate(
-      "patient",
-      "fullName email"
-    );
-    if (!medicalRecord) {
-      return res.status(404).json({
-        success: false,
-        message: "Không tìm thấy hồ sơ bệnh án",
-      });
-    }
-
-    medicalRecord.diagnosis = diagnosis || medicalRecord.diagnosis;
-    medicalRecord.treatment = treatment || medicalRecord.treatment;
-    medicalRecord.notes = notes || medicalRecord.notes;
-
-    if (prescribedMedicines && prescribedMedicines.length > 0) {
-      console.log("Received prescribedMedicines:", prescribedMedicines);
-
-      const newPrescriptions = await Promise.all(
-        prescribedMedicines.map(async (item) => {
-          const medicine = await Medicine.findById(item.medicine);
-          if (!medicine) {
-            throw new Error(`Không tìm thấy thuốc với ID ${item.medicine}`);
-          }
-
-          if (medicine.stock < item.quantity) {
-            throw new Error(`Không đủ ${medicine.name} trong kho`);
-          }
-
-          // Cập nhật tồn kho
-          medicine.stock -= item.quantity;
-          await medicine.save();
-
-          console.log(
-            `Processed medicine: ${medicine.name}, quantity: ${item.quantity}, price: ${medicine.price}`
-          );
-
-          return {
-            medicine: item.medicine,
-            quantity: item.quantity,
-            price: medicine.price,
-            total: item.quantity * medicine.price,
-          };
-        })
-      );
-
-      console.log("New prescriptions before saving:", newPrescriptions);
-      medicalRecord.prescribedMedicines = newPrescriptions;
-    } else {
-      console.log("No prescribedMedicines to update.");
-    }
-
-    medicalRecord.updatedAt = Date.now();
-    await medicalRecord.save();
-
-    // Gửi email hồ sơ bệnh án đã cập nhật cho bệnh nhân
-    if (medicalRecord.patient && medicalRecord.patient.email) {
-      const to = medicalRecord.patient.email;
-      const subject = "Cập nhật hồ sơ bệnh án";
-      const text = `Chào ${medicalRecord.patient.fullName},
-
-Hồ sơ bệnh án của bạn đã được cập nhật với các thông tin sau:
-
-Chẩn đoán: ${medicalRecord.diagnosis}
-Phác đồ điều trị: ${medicalRecord.treatment}
-Ghi chú: ${medicalRecord.notes}
-
-Đơn thuốc:
-${medicalRecord.prescribedMedicines
-  .map(
-    (item) =>
-      `- ${item.quantity} x ${item.medicine.name} (Giá: ${item.price}, Tổng: ${item.total})`
-  )
-  .join("\n")}
-
-Cảm ơn bạn,
-Tên phòng khám`;
-
-      try {
-        await sendEmail(to, subject, text);
-        console.log("Email đã được gửi thành công tới bệnh nhân");
-      } catch (emailError) {
-        console.error("Lỗi khi gửi email:", emailError);
-      }
-    } else {
-      console.error("Không tìm thấy email của bệnh nhân.");
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "Hồ sơ bệnh án đã được cập nhật thành công",
-      medicalRecord,
-    });
-  } catch (error) {
-    console.error("Error updating medical record:", error.message);
-    res.status(500).json({
-      success: false,
-      message: "Đã xảy ra lỗi khi cập nhật hồ sơ bệnh án",
-      error: error.message,
-    });
-  }
-};
-
 exports.getUpdatedMedicalRecords = async (req, res) => {
   try {
     // Lấy ID của bệnh nhân hiện tại
@@ -286,6 +369,9 @@ exports.getUpdatedMedicalRecords = async (req, res) => {
       }) // Chỉ lấy thông tin bác sĩ cần thiết
       .populate("appointment", "date startTime endTime")
       .populate("prescribedMedicines.medicine", "name")
+      .select(
+        "diagnosis treatment notes paymentStatus paymentLink orderCode prescribedMedicines updatedAt" // Bao gồm các trường cần thiết
+      )
       .lean();
 
     // Lọc các hồ sơ bệnh án có thông tin cập nhật từ bác sĩ (ví dụ, có chuẩn đoán và phương pháp điều trị)
