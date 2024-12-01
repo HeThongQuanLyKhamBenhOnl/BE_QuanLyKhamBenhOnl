@@ -210,19 +210,19 @@ exports.createAppointment = async (req, res) => {
         .status(404)
         .json({ success: false, message: "Không tìm thấy bác sĩ" });
 
-    const availableSlot = doctor.schedule.find(
-      (slot) =>
-        slot.date.toISOString() === new Date(date).toISOString() &&
-        slot.shift === shift &&
-        slot.isAvailable
-    );
+    // const availableSlot = doctor.schedule.find(
+    //   (slot) =>
+    //     slot.date.toISOString() === new Date(date).toISOString() &&
+    //     slot.shift === shift &&
+    //     slot.isAvailable
+    // );
 
-    if (!availableSlot) {
-      return res.status(400).json({
-        success: false,
-        message: "Ca làm việc này không khả dụng, vui lòng chọn ca khác",
-      });
-    }
+    // if (!availableSlot) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Ca làm việc này không khả dụng, vui lòng chọn ca khác",
+    //   });
+    // }
 
     const newAppointment = new Appointment({
       doctor: doctorId,
@@ -649,6 +649,209 @@ exports.rescheduleAppointment = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Đã xảy ra lỗi khi dời lịch hẹn",
+      error: error.message,
+    });
+  }
+};
+
+exports.getTopDoctors = async (req, res) => {
+  try {
+    // Aggregation pipeline
+    const topDoctors = await Appointment.aggregate([
+      {
+        $group: {
+          _id: "$doctor", // Group by doctor ID
+          appointmentCount: { $sum: 1 }, // Count the number of appointments for each doctor
+        },
+      },
+      {
+        $sort: { appointmentCount: -1 }, // Sort by appointment count in descending order
+      },
+      {
+        $limit: 10, // Limit to top 10 doctors
+      },
+      {
+        $lookup: {
+          from: "users", // Collection to join (User model)
+          localField: "_id", // Field from Appointment
+          foreignField: "_id", // Field from User
+          as: "userDetails", // Output array
+        },
+      },
+      {
+        $unwind: "$userDetails", // Convert array to object
+      },
+      {
+        $match: {
+          "userDetails.role": "doctor", // Ensure only doctors are included
+        },
+      },
+      {
+        $project: {
+          _id: 0, // Exclude MongoDB `_id`
+          doctorId: "$_id",
+          fullName: "$userDetails.fullName",
+          email: "$userDetails.email",
+          appointmentCount: 1,
+        },
+      },
+    ]);
+
+    res.status(200).json({
+      success: true,
+      message: "Thống kê các bác sĩ được đặt nhiều nhất thành công",
+      topDoctors,
+    });
+  } catch (error) {
+    console.error("Error in getTopDoctors:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Đã xảy ra lỗi khi thống kê các bác sĩ",
+      error: error.message,
+    });
+  }
+};
+
+exports.getAppointmentStats = async (req, res) => {
+  try {
+    const { period } = req.query; // Lấy khoảng thời gian từ query: "day", "week", "month"
+
+    if (!["day", "week", "month"].includes(period)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Khoảng thời gian không hợp lệ, hãy chọn 'day', 'week', hoặc 'month'.",
+      });
+    }
+
+    // Xác định khoảng thời gian bắt đầu và kết thúc
+    const now = new Date();
+    let startDate, endDate;
+
+    switch (period) {
+      case "day":
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // Bắt đầu ngày
+        endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + 1); // Kết thúc ngày
+        break;
+      case "week":
+        const startOfWeek = now.getDate() - now.getDay(); // Bắt đầu tuần
+        startDate = new Date(now.getFullYear(), now.getMonth(), startOfWeek);
+        endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + 7); // Kết thúc tuần
+        break;
+      case "month":
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1); // Bắt đầu tháng
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1); // Kết thúc tháng
+        break;
+    }
+
+    // Aggregation pipeline
+    const stats = await Appointment.aggregate([
+      {
+        $match: {
+          date: {
+            $gte: startDate,
+            $lt: endDate,
+          },
+        },
+      },
+      {
+        $group: {
+          _id: "$date", // Group by date
+          appointmentCount: { $sum: 1 }, // Count appointments
+          uniquePatients: { $addToSet: "$patient" }, // Collect unique patients
+        },
+      },
+      {
+        $project: {
+          date: "$_id",
+          appointmentCount: 1,
+          uniquePatientCount: { $size: "$uniquePatients" }, // Count unique patients
+          _id: 0,
+        },
+      },
+      {
+        $sort: { date: 1 }, // Sort by date ascending
+      },
+    ]);
+
+    res.status(200).json({
+      success: true,
+      message: `Thống kê lịch hẹn trong ${period} thành công`,
+      stats,
+    });
+  } catch (error) {
+    console.error("Error in getAppointmentStats:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Đã xảy ra lỗi khi thống kê lịch hẹn",
+      error: error.message,
+    });
+  }
+};
+
+exports.getTopDoctorsInMonth = async (req, res) => {
+  try {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1); // Bắt đầu tháng
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1); // Kết thúc tháng
+
+    // Aggregation pipeline
+    const topDoctors = await Appointment.aggregate([
+      {
+        $match: {
+          date: {
+            $gte: startOfMonth,
+            $lt: endOfMonth,
+          },
+        },
+      },
+      {
+        $group: {
+          _id: "$doctor", // Group by doctor ID
+          appointmentCount: { $sum: 1 }, // Count total appointments
+        },
+      },
+      {
+        $lookup: {
+          from: "users", // Join with User collection
+          localField: "_id", // Match with doctor ID
+          foreignField: "_id",
+          as: "doctorInfo",
+        },
+      },
+      {
+        $unwind: "$doctorInfo", // Flatten the doctorInfo array
+      },
+      {
+        $project: {
+          _id: 0,
+          doctorId: "$_id",
+          fullName: "$doctorInfo.fullName",
+          email: "$doctorInfo.email",
+          appointmentCount: 1,
+        },
+      },
+      {
+        $sort: { appointmentCount: -1 }, // Sort by appointment count descending
+      },
+      {
+        $limit: 10, // Limit to top 10 doctors
+      },
+    ]);
+
+    res.status(200).json({
+      success: true,
+      message:
+        "Thống kê bác sĩ có lượt đặt lịch nhiều nhất trong tháng thành công",
+      topDoctors,
+    });
+  } catch (error) {
+    console.error("Error in getTopDoctorsInMonth:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Đã xảy ra lỗi khi thống kê bác sĩ",
       error: error.message,
     });
   }

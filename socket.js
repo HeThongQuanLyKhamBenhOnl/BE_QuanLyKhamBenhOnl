@@ -13,11 +13,8 @@ function initializeSocket(server) {
   });
 
   io.on("connection", (socket) => {
-    console.log("Người dùng đã kết nối:", socket.id);
-
     // Tham gia phòng chat
     socket.on("joinChat", (chatId) => {
-      console.log(`Người dùng đã tham gia phòng chat: ${chatId}`);
       if (!chatId) {
         return socket.emit("error", { message: "chatId không hợp lệ" });
       }
@@ -29,12 +26,9 @@ function initializeSocket(server) {
       }
 
       socket.join(chatId);
-      console.log(`Người dùng đã tham gia phòng chat: ${chatId}`);
     });
 
     socket.on("sendMessage", async ({ chatId, senderId, content }) => {
-      console.log("Dữ liệu gửi lên:", { chatId, senderId, content });
-
       // Kiểm tra thông tin cần thiết
       if (!chatId || !senderId || !content) {
         return socket.emit("error", {
@@ -77,7 +71,6 @@ function initializeSocket(server) {
 
         // Thêm tin nhắn vào mảng messages
         chat.messages.push(newMessage);
-        console.log("Tin nhắn trước khi lưu:", chat.messages);
 
         // Lưu thay đổi vào MongoDB
         await chat.save();
@@ -118,7 +111,6 @@ function initializeSocket(server) {
 
         // Gửi danh sách tin nhắn về client
         socket.emit("messages", chat.messages);
-        console.log(`Đã gửi danh sách tin nhắn cho chatId: ${chatId}`);
       } catch (error) {
         console.error("Lỗi khi lấy tin nhắn:", error);
         socket.emit("error", {
@@ -127,9 +119,7 @@ function initializeSocket(server) {
         });
       }
     });
-    socket.on("disconnect", () => {
-      console.log("Người dùng đã ngắt kết nối:", socket.id);
-    });
+    socket.on("disconnect", () => {});
   });
 }
 

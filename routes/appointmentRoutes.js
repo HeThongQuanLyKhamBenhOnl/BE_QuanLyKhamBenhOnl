@@ -13,8 +13,11 @@ const {
   getDoctorMedicalRecords,
   handlePaymentCancellation,
   handlePaymentSuccess,
+  getTopDoctors,
+  getAppointmentStats,
+  getTopDoctorsInMonth,
 } = require("../controllers/AppointmentController");
-const { verifyToken, isDoctor } = require("../Middleware/Middleware");
+const { verifyToken, isDoctor, isAdmin } = require("../Middleware/Middleware");
 
 router.post("/appointments", verifyToken, createAppointment);
 
@@ -69,4 +72,7 @@ router.put(
   rescheduleAppointment
 );
 
+router.get("/appointment-stats", verifyToken, isAdmin, getDoctorAppointments);
+router.get("/top-doctor", verifyToken, isAdmin, getDoctorAppointments);
+router.get("/top-doctors-month", verifyToken, isAdmin, getDoctorAppointments);
 module.exports = router;

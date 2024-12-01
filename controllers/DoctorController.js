@@ -6,6 +6,51 @@ const isValidObjectId = (id) => {
   return mongoose.Types.ObjectId.isValid(id);
 };
 
+exports.getSchedule = async (req, res) => {
+  const { doctorId } = req.params; // Lấy ID bác sĩ từ params
+
+  try {
+    // Kiểm tra nếu doctorId không được cung cấp
+    if (!doctorId) {
+      return res.status(400).json({
+        success: false,
+        message: "Vui lòng cung cấp ID bác sĩ.",
+      });
+    }
+
+    // Tìm bác sĩ dựa trên ID
+    const doctor = await Doctor.find({ user: doctorId }).select("schedule");
+
+    if (!doctor) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Không tìm thấy bác sĩ." });
+    }
+
+    // if (!doctor.schedule || doctor.schedule.length === 0) {
+    //   return res.status(200).json({
+    //     success: true,
+    //     message: "Bác sĩ hiện chưa có lịch làm việc nào.",
+    //     schedule: [],
+    //   });
+    // }
+
+    // Trả về lịch làm việc
+    res.status(200).json({
+      success: true,
+      message: "Lấy lịch làm việc thành công.",
+      schedule: doctor,
+    });
+  } catch (error) {
+    console.error("Lỗi khi lấy lịch làm việc:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Đã xảy ra lỗi khi lấy lịch làm việc.",
+      error: error.message,
+    });
+  }
+};
+
 exports.updateDoctorSchedule = async (req, res) => {
   const doctorId = req.user._id;
   const { scheduleId, date, shift, isAvailable } = req.body;

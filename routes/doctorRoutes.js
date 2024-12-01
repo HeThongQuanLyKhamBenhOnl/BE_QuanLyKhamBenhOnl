@@ -9,6 +9,7 @@ const {
   getDoctorById,
   getDoctorProfile,
   updateDoctorProfile,
+  getSchedule,
 } = require("../controllers/DoctorController");
 const { upload } = require("../config/cloudinaryConfig");
 const router = express.Router();
@@ -40,6 +41,6 @@ router.put(
 // Lấy danh sách tất cả các bác sĩ
 router.get("/all", getAllDoctors);
 
-// Lấy thông tin chi tiết của một bác sĩ theo doctorId
+router.get("/schedule/:doctorId", verifyToken, getSchedule);
 
 module.exports = router;
