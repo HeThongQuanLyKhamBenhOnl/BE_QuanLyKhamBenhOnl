@@ -30,7 +30,7 @@ router.put(
 router.get("/medical-records/payment-success", handlePaymentSuccess);
 router.get("/medical-records/payment-cancel", handlePaymentCancellation);
 
-router.get("/medical-records/me", verifyToken, isDoctor, getAllMedicalRecords);
+router.get("/medical-records/me", verifyToken, getAllMedicalRecords);
 router.get(
   "/medical-records/doctor",
   verifyToken,
@@ -72,7 +72,7 @@ router.put(
   rescheduleAppointment
 );
 
-router.get("/appointment-stats", verifyToken, isAdmin, getDoctorAppointments);
-router.get("/top-doctor", verifyToken, isAdmin, getDoctorAppointments);
-router.get("/top-doctors-month", verifyToken, isAdmin, getDoctorAppointments);
+router.get("/appointment-stats", verifyToken, isAdmin, getAppointmentStats);
+router.get("/top-doctor", verifyToken, isAdmin, getTopDoctors);
+router.get("/top-doctors-month", verifyToken, isAdmin, getTopDoctorsInMonth);
 module.exports = router;

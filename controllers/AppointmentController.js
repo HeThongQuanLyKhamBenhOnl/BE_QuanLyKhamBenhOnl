@@ -336,10 +336,23 @@ exports.getDoctorMedicalRecords = async (req, res) => {
 
 exports.getAllMedicalRecords = async (req, res) => {
   try {
-    // Tìm tất cả hồ sơ bệnh án và lấy kèm thông tin bệnh nhân, bác sĩ, cuộc hẹn liên quan
-    const medicalRecords = await MedicalRecord.find().populate(
-      "patient doctor appointment"
-    );
+    // Lấy tất cả hồ sơ bệnh án với populate lồng nhau
+    const medicalRecords = await MedicalRecord.find()
+      .populate({
+        path: "patient",
+        select: "fullName email phone", // Chỉ lấy các trường cần thiết từ patient
+      })
+      .populate({
+        path: "doctor",
+        model: "User", // giả sử bác sĩ nằm trong bảng User
+        select: "fullName",
+        match: { role: "doctor" },
+      })
+      .populate({
+        path: "appointment",
+        select: "date shift status reasonForVisit notes", // Chỉ lấy các trường cần thiết từ appointment
+      })
+      .populate("prescribedMedicines.medicine", "name");
 
     res.status(200).json({
       success: true,
@@ -347,6 +360,7 @@ exports.getAllMedicalRecords = async (req, res) => {
       medicalRecords,
     });
   } catch (error) {
+    console.error("Lỗi khi lấy hồ sơ bệnh án:", error.message);
     res.status(500).json({
       success: false,
       message: "Đã xảy ra lỗi khi lấy hồ sơ bệnh án",
@@ -354,6 +368,7 @@ exports.getAllMedicalRecords = async (req, res) => {
     });
   }
 };
+
 exports.getUpdatedMedicalRecords = async (req, res) => {
   try {
     // Lấy ID của bệnh nhân hiện tại
@@ -452,7 +467,7 @@ exports.getDoctorAppointments = async (req, res) => {
 
     // Tìm tất cả lịch hẹn mà bác sĩ là người phụ trách
     const appointments = await Appointment.find({ doctor: doctorId })
-      .populate("patient", "fullName phone email") // Lấy thông tin bệnh nhân
+      .populate("patient", "fullName phone email gender") // Lấy thông tin bệnh nhân
       .populate({
         path: "doctor",
         populate: {
@@ -656,46 +671,57 @@ exports.rescheduleAppointment = async (req, res) => {
 
 exports.getTopDoctors = async (req, res) => {
   try {
-    // Aggregation pipeline
     const topDoctors = await Appointment.aggregate([
+      // Nhóm theo doctor và đếm số lượng lịch hẹn
       {
         $group: {
-          _id: "$doctor", // Group by doctor ID
-          appointmentCount: { $sum: 1 }, // Count the number of appointments for each doctor
+          _id: "$doctor", // Nhóm theo ID bác sĩ
+          appointmentCount: { $sum: 1 }, // Đếm số lượng lịch hẹn của từng bác sĩ
         },
       },
+      // Sắp xếp theo số lượng lịch hẹn giảm dần
       {
-        $sort: { appointmentCount: -1 }, // Sort by appointment count in descending order
+        $sort: { appointmentCount: -1 },
       },
+      // Lấy top 10 bác sĩ
       {
-        $limit: 10, // Limit to top 10 doctors
+        $limit: 10,
       },
+      // Tham chiếu trực tiếp sang bảng users
       {
         $lookup: {
-          from: "users", // Collection to join (User model)
-          localField: "_id", // Field from Appointment
-          foreignField: "_id", // Field from User
-          as: "userDetails", // Output array
+          from: "users", // Kết hợp với bảng users
+          localField: "_id", // Trường doctor trong appointments
+          foreignField: "_id", // Trường _id trong users
+          as: "userDetails",
         },
       },
+      // Bóc tách userDetails từ mảng thành object
       {
-        $unwind: "$userDetails", // Convert array to object
+        $unwind: "$userDetails",
       },
-      {
-        $match: {
-          "userDetails.role": "doctor", // Ensure only doctors are included
-        },
-      },
+      // Chọn các trường cần thiết
       {
         $project: {
-          _id: 0, // Exclude MongoDB `_id`
-          doctorId: "$_id",
-          fullName: "$userDetails.fullName",
-          email: "$userDetails.email",
-          appointmentCount: 1,
+          _id: 0, // Loại bỏ _id của MongoDB
+          doctorId: "$_id", // ID của bác sĩ
+          fullName: "$userDetails.fullName", // Họ tên bác sĩ
+          email: "$userDetails.email", // Email của bác sĩ
+          appointmentCount: 1, // Số lượng lịch hẹn
         },
       },
     ]);
+
+    // Kiểm tra nếu không có bác sĩ nào được trả về
+    if (topDoctors.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "Không có bác sĩ nào được tìm thấy.",
+        topDoctors: [],
+      });
+    }
+
+    console.log("Top Doctors Result:", topDoctors);
 
     res.status(200).json({
       success: true,
@@ -715,6 +741,9 @@ exports.getTopDoctors = async (req, res) => {
 exports.getAppointmentStats = async (req, res) => {
   try {
     const { period } = req.query; // Lấy khoảng thời gian từ query: "day", "week", "month"
+
+    // Log để kiểm tra giá trị của `period`
+    console.log("Received period:", period);
 
     if (!["day", "week", "month"].includes(period)) {
       return res.status(400).json({
@@ -746,6 +775,9 @@ exports.getAppointmentStats = async (req, res) => {
         break;
     }
 
+    console.log("Start Date:", startDate);
+    console.log("End Date:", endDate);
+
     // Aggregation pipeline
     const stats = await Appointment.aggregate([
       {
@@ -776,6 +808,8 @@ exports.getAppointmentStats = async (req, res) => {
       },
     ]);
 
+    console.log("Stats Result:", stats);
+
     res.status(200).json({
       success: true,
       message: `Thống kê lịch hẹn trong ${period} thành công`,
@@ -790,15 +824,14 @@ exports.getAppointmentStats = async (req, res) => {
     });
   }
 };
-
 exports.getTopDoctorsInMonth = async (req, res) => {
   try {
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1); // Bắt đầu tháng
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1); // Kết thúc tháng
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-    // Aggregation pipeline
     const topDoctors = await Appointment.aggregate([
+      // Chỉ lấy lịch hẹn trong tháng hiện tại
       {
         $match: {
           date: {
@@ -807,40 +840,49 @@ exports.getTopDoctorsInMonth = async (req, res) => {
           },
         },
       },
+      // Nhóm theo bác sĩ và đếm số lượng lịch hẹn
       {
         $group: {
-          _id: "$doctor", // Group by doctor ID
-          appointmentCount: { $sum: 1 }, // Count total appointments
+          _id: "$doctor", // Nhóm theo ID bác sĩ
+          appointmentCount: { $sum: 1 }, // Đếm số lượng lịch hẹn của từng bác sĩ
         },
       },
+      // Kết hợp trực tiếp với bảng users
       {
         $lookup: {
-          from: "users", // Join with User collection
-          localField: "_id", // Match with doctor ID
-          foreignField: "_id",
-          as: "doctorInfo",
+          from: "users", // Tham chiếu tới bảng users
+          localField: "_id", // Trường doctor trong appointments
+          foreignField: "_id", // Trường _id trong users
+          as: "userDetails",
         },
       },
+      // Bóc tách userDetails từ mảng thành object
       {
-        $unwind: "$doctorInfo", // Flatten the doctorInfo array
+        $unwind: "$userDetails",
       },
+      // Chọn các trường cần thiết
       {
         $project: {
           _id: 0,
-          doctorId: "$_id",
-          fullName: "$doctorInfo.fullName",
-          email: "$doctorInfo.email",
-          appointmentCount: 1,
+          doctorId: "$_id", // ID của bác sĩ
+          fullName: "$userDetails.fullName", // Họ tên bác sĩ
+          email: "$userDetails.email", // Email của bác sĩ
+          appointmentCount: 1, // Số lượng lịch hẹn
         },
       },
+      // Sắp xếp theo số lượng lịch hẹn giảm dần
       {
-        $sort: { appointmentCount: -1 }, // Sort by appointment count descending
+        $sort: { appointmentCount: -1 },
       },
+      // Lấy top 10 bác sĩ
       {
-        $limit: 10, // Limit to top 10 doctors
+        $limit: 10,
       },
     ]);
 
+    console.log("Top Doctors in Month Result:", topDoctors);
+
+    // Trả về kết quả
     res.status(200).json({
       success: true,
       message:
