@@ -6,8 +6,7 @@ const Chat = require("./models/Chat");
 function initializeSocket(server) {
   const io = socketIo(server, {
     cors: {
-      origin: "https://phongkhamonline.onrender.com",
-      //origin: "*", // Nên thay * bằng URL cụ thể của frontend để bảo mật
+      origin: "*" || "http://localhost:5000", // Nên thay * bằng URL cụ thể của frontend để bảo mật
       methods: ["GET", "POST"],
       credentials: true,
     },
