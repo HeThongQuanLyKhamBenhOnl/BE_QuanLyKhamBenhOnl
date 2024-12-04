@@ -7,6 +7,7 @@ const {
   getAllPatients,
   getAllDoctors,
   forgotPassword,
+  sendOtpWithDetails,
 } = require("../controllers/userController");
 const { verifyToken, isAdmin } = require("../Middleware/Middleware");
 const User = require("../models/User");
@@ -15,6 +16,7 @@ const argon2 = require("argon2");
 const router = express.Router();
 
 // Đăng ký người dùng (bệnh nhân)
+router.post("/send-otp", sendOtpWithDetails);
 router.post("/register", registerUser);
 router.post("/login", loginUser);
 router.put("/profile", verifyToken, updateUserProfile);

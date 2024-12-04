@@ -3,8 +3,9 @@ const argon2 = require("argon2");
 const { generateToken } = require("../Middleware/Middleware");
 const Doctor = require("../models/Doctor");
 const sendEmail = require("../config/mailer");
+const { sendVerificationCode, verifyCode } = require("../config/twillioconfig");
 
-exports.registerUser = async (req, res) => {
+exports.sendOtpWithDetails = async (req, res) => {
   const {
     username,
     email,
@@ -16,15 +17,88 @@ exports.registerUser = async (req, res) => {
     address,
   } = req.body;
 
+  // Kiểm tra thông tin bắt buộc
+  if (!phone || !username || !email || !password) {
+    return res.status(400).json({
+      success: false,
+      message:
+        "Vui lòng nhập đầy đủ thông tin bắt buộc: username, email, password, phone",
+    });
+  }
+
   try {
+    // Gửi OTP tới số điện thoại
+    const status = await sendVerificationCode(phone);
+
+    if (status === "pending") {
+      // Lưu thông tin tạm thời vào session, cache, hoặc token JWT để sử dụng sau
+      return res.status(200).json({
+        success: true,
+        message: "OTP đã được gửi. Vui lòng xác nhận OTP để hoàn tất đăng ký.",
+        tempUser: {
+          username,
+          email,
+          password,
+          fullName,
+          phone,
+          gender,
+          dateOfBirth,
+          address,
+        },
+      });
+    }
+
+    res.status(500).json({ success: false, message: "Gửi OTP thất bại" });
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).json({ success: false, message: "Lỗi máy chủ" });
+  }
+};
+
+exports.registerUser = async (req, res) => {
+  const { otp, tempUser } = req.body;
+
+  // Kiểm tra thông tin bắt buộc
+  if (!otp || !tempUser || !tempUser.phone) {
+    return res.status(400).json({
+      success: false,
+      message: "Vui lòng cung cấp OTP và thông tin người dùng tạm thời",
+    });
+  }
+
+  const {
+    username,
+    email,
+    password,
+    fullName,
+    phone,
+    gender,
+    dateOfBirth,
+    address,
+  } = tempUser;
+
+  try {
+    // Xác minh OTP với Twilio
+    const status = await verifyCode(phone, otp);
+
+    if (status !== "approved") {
+      return res
+        .status(400)
+        .json({ success: false, message: "OTP không hợp lệ hoặc đã hết hạn" });
+    }
+
+    // Kiểm tra email đã tồn tại hay chưa
     let user = await User.findOne({ email });
     if (user) {
       return res
         .status(400)
         .json({ success: false, message: "Email đã được sử dụng" });
     }
+
+    // Hash mật khẩu
     const hashedPassword = await argon2.hash(password);
 
+    // Tạo mới người dùng
     user = new User({
       username,
       email,
@@ -39,8 +113,10 @@ exports.registerUser = async (req, res) => {
 
     await user.save();
 
+    // Tạo token
     const token = generateToken(user);
 
+    // Trả về kết quả
     res.status(201).json({
       success: true,
       message: "Đăng ký thành công",

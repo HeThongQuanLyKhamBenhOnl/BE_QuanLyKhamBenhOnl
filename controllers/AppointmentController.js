@@ -20,10 +20,9 @@ exports.updateMedicalRecord = async (req, res) => {
   const { diagnosis, treatment, notes, prescribedMedicines } = req.body;
 
   try {
-    const medicalRecord = await MedicalRecord.findById(recordId).populate(
-      "patient",
-      "fullName email"
-    );
+    const medicalRecord = await MedicalRecord.findById(recordId)
+      .populate("patient", "fullName email")
+      .populate("prescribedMedicines.medicine", "name");
 
     if (!medicalRecord) {
       return res.status(404).json({
@@ -104,6 +103,48 @@ exports.updateMedicalRecord = async (req, res) => {
     // Save updated medical record
     medicalRecord.updatedAt = Date.now();
     await medicalRecord.save();
+
+    // Gửi email cho bệnh nhân
+    if (medicalRecord.patient && medicalRecord.patient.email) {
+      const prescribedMedicinesList = medicalRecord.prescribedMedicines
+        .map(
+          (item) =>
+            `- Thuốc: ${item.medicine}, Số lượng: ${item.quantity}, Giá: ${item.price}, Tổng: ${item.total}`
+        )
+        .join("\n");
+
+      const emailSubject = "Hồ sơ bệnh án đã được cập nhật";
+      const emailBody = `
+        Xin chào ${medicalRecord.patient.fullName},
+
+        Hồ sơ bệnh án của bạn đã được cập nhật với thông tin sau:
+        
+        - Chuẩn đoán: ${medicalRecord.diagnosis || "Không có"}
+        - Phương pháp điều trị: ${medicalRecord.treatment || "Không có"}
+        - Ghi chú: ${medicalRecord.notes || "Không có"}
+        - Trạng thái thanh toán: ${
+          medicalRecord.paymentStatus || "Chưa xác định"
+        }
+        - Toa thuốc:
+        ${prescribedMedicinesList || "Không có"}
+        
+        ${
+          medicalRecord.paymentLink
+            ? `Liên kết thanh toán: ${medicalRecord.paymentLink}`
+            : ""
+        }
+        
+        
+
+        Trân trọng,
+        Hệ thống quản lý bệnh án
+      `;
+
+      await sendEmail(medicalRecord.patient.email, emailSubject, emailBody);
+      console.log(`Email đã được gửi tới ${medicalRecord.patient.email}`);
+    } else {
+      console.warn("Bệnh nhân không có email, không thể gửi thông báo.");
+    }
 
     res.status(200).json({
       success: true,
