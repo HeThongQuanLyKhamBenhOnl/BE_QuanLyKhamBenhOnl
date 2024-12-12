@@ -6,6 +6,7 @@ const sendEmail = require("../config/mailer");
 const User = require("../models/User");
 const mongoose = require("mongoose");
 const Chat = require("../models/Chat");
+const DOMAIN_URL = "https://phongkhamonline.onrender.com";
 
 const PayOS = require("@payos/node");
 
@@ -78,8 +79,10 @@ exports.updateMedicalRecord = async (req, res) => {
         orderCode,
         amount: totalCost,
         description: "Thanh toán đơn thuốc",
-        returnUrl: `${process.env.DOMAIN_URL}/api/medical-records/payment-success?orderCode=${orderCode}`,
-        cancelUrl: `${process.env.DOMAIN_URL}/api/medical-records/payment-cancel?orderCode=${orderCode}`,
+        // returnUrl: `${process.env.DOMAIN_URL}/api/medical-records/payment-success?orderCode=${orderCode}`,
+        // cancelUrl: `${process.env.DOMAIN_URL}/api/medical-records/payment-cancel?orderCode=${orderCode}`,
+        returnUrl: `${DOMAIN_URL}/api/medical-records/payment-success?orderCode=${orderCode}`,
+        cancelUrl: `${DOMAIN_URL}/api/medical-records/payment-cancel?orderCode=${orderCode}`,
       };
 
       const paymentResponse = await payos.createPaymentLink(paymentData);
