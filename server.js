@@ -15,6 +15,7 @@ connectDB();
 app.use(
   cors({
     origin: "https://phongkhamonline.onrender.com",
+    methods: ["GET", "POST"],
     // origin: "*" || "http://localhost:5000",
     credentials: true,
   })
