@@ -14,7 +14,8 @@ connectDB();
 // Cấu hình CORS cho Express
 app.use(
   cors({
-    origin: "*" || "http://localhost:5000",
+    origin: "https://phongkhamonline.onrender.com",
+    // origin: "*" || "http://localhost:5000",
     credentials: true,
   })
 );
